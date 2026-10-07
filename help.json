@@ -1,0 +1,73 @@
+{
+  "title": "Driftbox SIII",
+  "children": [
+    {
+      "title": "Playing",
+      "lines": [
+        "Mono 2-VCO synth after",
+        "the REON driftbox SIII.",
+        "Notes open the gate;",
+        "no envelope. Last note",
+        "has priority. FREQ is",
+        "the pitch at C4."
+      ]
+    },
+    {
+      "title": "Main knobs",
+      "lines": [
+        "1 V1 FRQ 0.3Hz-14kHz",
+        "2 V1 MOD FM from VCO2",
+        "3 V2 FRQ",
+        "4 V2 MOD FM from VCO1",
+        "5 CUTOFF 6 RESO",
+        "7 D.TIME 8 F.B"
+      ]
+    },
+    {
+      "title": "VCO page",
+      "lines": [
+        "WAV Saw Tri Sqr Puls",
+        "  Nois (provisional)",
+        "F/S: FM, or Sync to",
+        "  the other VCO",
+        "LFO>V: LFO into MOD",
+        "VOL: mixer level"
+      ]
+    },
+    {
+      "title": "MOD/LFO page",
+      "lines": [
+        "VCF MD: depth for the",
+        "  VCO1/VCO2/LFO > VCF",
+        "  switches (audio rate)",
+        "RATE 0.02-200Hz",
+        "HOLD: Play=on while",
+        "  Move plays (dflt),",
+        "  Always=drone, Off",
+        "VOLUME"
+      ]
+    },
+    {
+      "title": "DRIFT page",
+      "lines": [
+        "DRFT X: VCO pitch",
+        "  +-3 oct, or D.Tm",
+        "DRFT Y: VCF +-5 oct,",
+        "  or F.B",
+        "TRIG: opens the gate",
+        "  for 0.2 s"
+      ]
+    },
+    {
+      "title": "Delay",
+      "lines": [
+        "F.B 0 = no delay.",
+        "Raising F.B brings in",
+        "the echo and repeats.",
+        "Top: a saturating wash.",
+        "D.TIME 10ms-1s glides:",
+        "turning it bends pitch."
+      ]
+    }
+  ]
+}
