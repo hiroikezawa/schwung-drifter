@@ -57,23 +57,24 @@ static db_instance g_pool[DB_INSTANCES];
 static float g_sr = (float)MOVE_SAMPLE_RATE;
 static const host_api_v1_t *g_host;
 
-/* Stock knob grid: MAIN, then VCO, MOD/LFO and DRIFT pages. Served from
- * get_param -- a sound generator's module.json hierarchy is never read. */
+/* Stock knob grid: MAIN (volume and the DRIFT joystick first), then VCF/DLY,
+ * VCO and MOD/LFO pages. Served from get_param -- a sound generator's
+ * module.json hierarchy is never read. */
 static const char db_hierarchy[] =
     "{\"modes\":null,\"levels\":{"
       "\"root\":{\"label\":\"Driftbox SIII\","
-        "\"knobs\":[\"vco1_freq\",\"vco1_mod\",\"vco2_freq\",\"vco2_mod\",\"vcf_cut\",\"vcf_reso\",\"delay_time\",\"delay_feedback\"],"
-        "\"params\":[\"vco1_freq\",\"vco1_mod\",\"vco2_freq\",\"vco2_mod\",\"vcf_cut\",\"vcf_reso\",\"delay_time\",\"delay_feedback\","
-          "{\"level\":\"vco\",\"label\":\"VCO\"},{\"level\":\"mod\",\"label\":\"MOD/LFO\"},{\"level\":\"drift\",\"label\":\"DRIFT\"}]},"
+        "\"knobs\":[\"volume\",\"drift_x\",\"drift_y\",\"vco1_freq\",\"vco1_mod\",\"vco2_freq\",\"vco2_mod\",\"vcf_cut\"],"
+        "\"params\":[\"volume\",\"drift_x\",\"drift_y\",\"vco1_freq\",\"vco1_mod\",\"vco2_freq\",\"vco2_mod\",\"vcf_cut\","
+          "{\"level\":\"vcfdly\",\"label\":\"VCF/DLY\"},{\"level\":\"vco\",\"label\":\"VCO\"},{\"level\":\"mod\",\"label\":\"MOD/LFO\"}]},"
+      "\"vcfdly\":{\"label\":\"VCF/DLY\","
+        "\"knobs\":[\"vcf_reso\",\"delay_time\",\"delay_feedback\",\"drift_x_target\",\"drift_y_target\",\"trigger\"],"
+        "\"params\":[\"vcf_reso\",\"delay_time\",\"delay_feedback\",\"drift_x_target\",\"drift_y_target\",\"trigger\"]},"
       "\"vco\":{\"label\":\"VCO\","
         "\"knobs\":[\"vco1_wave\",\"vco1_mode\",\"vco1_lfo\",\"vco1_vol\",\"vco2_wave\",\"vco2_mode\",\"vco2_lfo\",\"vco2_vol\"],"
         "\"params\":[\"vco1_wave\",\"vco1_mode\",\"vco1_lfo\",\"vco1_vol\",\"vco2_wave\",\"vco2_mode\",\"vco2_lfo\",\"vco2_vol\"]},"
       "\"mod\":{\"label\":\"MOD/LFO\","
-        "\"knobs\":[\"vcf_mod\",\"vcf_vco1\",\"vcf_vco2\",\"vcf_lfo\",\"lfo_rate\",\"lfo_wave\",\"gate_hold\",\"volume\"],"
-        "\"params\":[\"vcf_mod\",\"vcf_vco1\",\"vcf_vco2\",\"vcf_lfo\",\"lfo_rate\",\"lfo_wave\",\"gate_hold\",\"volume\"]},"
-      "\"drift\":{\"label\":\"DRIFT\","
-        "\"knobs\":[\"drift_x\",\"drift_x_target\",\"drift_y\",\"drift_y_target\",\"trigger\"],"
-        "\"params\":[\"drift_x\",\"drift_x_target\",\"drift_y\",\"drift_y_target\",\"trigger\"]}"
+        "\"knobs\":[\"vcf_mod\",\"vcf_vco1\",\"vcf_vco2\",\"vcf_lfo\",\"lfo_rate\",\"lfo_wave\",\"gate_hold\"],"
+        "\"params\":[\"vcf_mod\",\"vcf_vco1\",\"vcf_vco2\",\"vcf_lfo\",\"lfo_rate\",\"lfo_wave\",\"gate_hold\"]}"
     "}}";
 
 /* ---- lifecycle ---------------------------------------------------------- */

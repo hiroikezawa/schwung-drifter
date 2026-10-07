@@ -113,14 +113,18 @@ assert [m["key"] for m in meta] == STABLE, "stable parameter IDs"
 keys = {m["key"] for m in meta}
 h = json.loads(read("ui_hierarchy"))
 L = h["levels"]
-assert L["root"]["knobs"] == ["vco1_freq", "vco1_mod", "vco2_freq", "vco2_mod",
-                              "vcf_cut", "vcf_reso", "delay_time", "delay_feedback"]
+assert L["root"]["knobs"] == ["volume", "drift_x", "drift_y", "vco1_freq",
+                              "vco1_mod", "vco2_freq", "vco2_mod", "vcf_cut"]
+assert L["vcfdly"]["knobs"] == ["vcf_reso", "delay_time", "delay_feedback",
+                                "drift_x_target", "drift_y_target", "trigger"]
 assert L["vco"]["knobs"] == ["vco1_wave", "vco1_mode", "vco1_lfo", "vco1_vol",
                              "vco2_wave", "vco2_mode", "vco2_lfo", "vco2_vol"]
 assert L["mod"]["knobs"] == ["vcf_mod", "vcf_vco1", "vcf_vco2", "vcf_lfo",
-                             "lfo_rate", "lfo_wave", "gate_hold", "volume"]
-assert L["drift"]["knobs"][:4] == ["drift_x", "drift_x_target", "drift_y", "drift_y_target"]
-assert [e["level"] for e in L["root"]["params"] if isinstance(e, dict)] == ["vco", "mod", "drift"]
+                             "lfo_rate", "lfo_wave", "gate_hold"]
+assert [e["level"] for e in L["root"]["params"] if isinstance(e, dict)] == ["vcfdly", "vco", "mod"]
+on_pages = [k for lvl in L.values() for k in lvl["knobs"]]
+assert sorted(on_pages) == sorted(STABLE) and len(set(on_pages)) == len(on_pages), \
+    "every parameter on exactly one page"
 for lvl in L.values():
     for k in lvl["knobs"]:
         assert k in keys, k

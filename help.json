@@ -15,12 +15,23 @@
     {
       "title": "Main knobs",
       "lines": [
-        "1 V1 FRQ 0.3Hz-14kHz",
-        "2 V1 MOD FM from VCO2",
-        "3 V2 FRQ",
-        "4 V2 MOD FM from VCO1",
-        "5 CUTOFF 6 RESO",
-        "7 D.TIME 8 F.B"
+        "1 VOLUME",
+        "2 DRFT X 3 DRFT Y",
+        "4 V1 FRQ 0.3Hz-14kHz",
+        "5 V1 MOD FM from VCO2",
+        "6 V2 FRQ 7 V2 MOD",
+        "8 CUTOFF"
+      ]
+    },
+    {
+      "title": "VCF/DLY page",
+      "lines": [
+        "1 RESO 2 D.TIME 3 F.B",
+        "4 X TGT: DRFT X moves",
+        "  VCO +-3oct or D.Tm",
+        "5 Y TGT: DRFT Y moves",
+        "  VCF +-5oct or F.B",
+        "6 TRIG: gate 0.2 s"
       ]
     },
     {
@@ -43,19 +54,7 @@
         "RATE 0.02-200Hz",
         "HOLD: Play=on while",
         "  Move plays (dflt),",
-        "  Always=drone, Off",
-        "VOLUME"
-      ]
-    },
-    {
-      "title": "DRIFT page",
-      "lines": [
-        "DRFT X: VCO pitch",
-        "  +-3 oct, or D.Tm",
-        "DRFT Y: VCF +-5 oct,",
-        "  or F.B",
-        "TRIG: opens the gate",
-        "  for 0.2 s"
+        "  Always=drone, Off"
       ]
     },
     {
