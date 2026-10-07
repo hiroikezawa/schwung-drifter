@@ -1,8 +1,8 @@
 {
-  "id": "driftbox",
-  "name": "Driftbox SIII",
+  "id": "drifter",
+  "name": "DRIFTER",
   "abbrev": "DRFT",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Mono 2-VCO cross-mod synth inspired by the REON driftbox SIII: FM/sync, audio-rate VCF mod, ladder VCF, LFO, delay, DRIFT X/Y",
   "author": "Hiro Ikezawa",
   "api_version": 2,

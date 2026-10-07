@@ -1,4 +1,4 @@
-/* Driftbox SIII - engine. MIT.
+/* DRIFTER - engine. MIT.
  *
  * Inspired by the REON driftbox SIII. Not affiliated with or endorsed by
  * REON. A clean-room implementation from the published feature list and

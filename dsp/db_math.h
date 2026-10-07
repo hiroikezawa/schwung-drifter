@@ -1,4 +1,4 @@
-/* Driftbox SIII - small shared math helpers. MIT.
+/* DRIFTER - small shared math helpers. MIT.
  * Inline and allocation-free: everything here runs on the SPI callback. */
 #ifndef DB_MATH_H
 #define DB_MATH_H

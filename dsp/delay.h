@@ -1,4 +1,4 @@
-/* Driftbox SIII - delay. MIT.
+/* DRIFTER - delay. MIT.
  *
  * TIME and FEEDBACK only. What makes it less than a clean digital echo, and
  * nothing more:

@@ -1,4 +1,4 @@
-/* Driftbox SIII - engine. MIT. See db_engine.h. */
+/* DRIFTER - engine. MIT. See db_engine.h. */
 #include "db_engine.h"
 #include <math.h>
 #include <string.h>

@@ -1,4 +1,4 @@
-# Driftbox SIII（schwung-driftbox）
+# DRIFTER（schwung-drifter）
 
 Ableton Move 上の Schwung で動く、2 VCO のモノフォニック・クロスモジュレーション・シンセです（Schwung の sound generator モジュール）。
 
@@ -11,7 +11,7 @@ REON が公開している機能一覧と一般的な DSP 技術だけをもと�
 
 ## 概要
 
-目指しているのは「よくある 2 オシレーターのシンセ」ではなく、driftbox らしさの再現です。
+目指しているのは「よくある 2 オシレーターのシンセ」ではなく、REON driftbox らしさの再現です。
 
 - 2 つの VCO がオーディオレートでお互いを変調し合い、金属的な音・ノイズのような音・カオティックな音まで暴れる
 - 共振（レゾナンス）付きのラダー・フィルターを、VCO や LFO でオーディオレート変調する
@@ -40,8 +40,10 @@ REON が公開している機能一覧と一般的な DSP 技術だけをもと�
 ### 1. スロットに読み込む
 
 1. Schwung の画面を開き、使いたいトラックのスロットを選びます。
-2. Sound Generator の一覧から **Driftbox SIII** を選びます。
+2. Sound Generator の一覧から **DRIFTER** を選びます。
 3. Move でそのトラックを選び、パッドを押すと音が出ます。
+
+**旧名「Driftbox SIII」（ID `driftbox`）から改名しました（v0.5.0）。** 内部 ID も `drifter` に変わったため、Move からは別のモジュールとして見えます。旧版を入れていたセットでは、スロットに DRIFTER を入れ直してください（旧版のノブ設定とオートメーションは引き継がれません）。
 
 モジュールを入れた直後（インストール・更新の直後）は、**必ず Move を再起動**してから使ってください。再起動しないと、古いモジュールと新しいモジュールが混ざった状態になり、ノブが効かないなどの不具合が起きます。
 
@@ -59,7 +61,7 @@ Gate Hold は MOD/LFO ページ（4 ページ目）のノブ 7、Trigger は VCF
 
 ### 3. まず触ってみるノブ
 
-最初の 2 ページ（MAIN と VCF/DLY）で driftbox らしい音はほぼ作れます。
+最初の 2 ページ（MAIN と VCF/DLY）で DRIFTER らしい音はほぼ作れます。
 
 **MAIN（1 ページ目）**
 1. **ノブ 1（VOLUME）**：全体の音量です。
@@ -155,9 +157,9 @@ TRIGGER はクリックするか、ノブを少し回すと発火します（値
 Schwung 本体のオートメーション機能で、ノブの動きを Move のクリップに記録・再生できます（Schwung 1.6 以降）。モジュール側の特別な設定はいりません。
 
 **記録する**
-1. Move で Driftbox のトラックを選び、クリップを再生します。
+1. Move で DRIFTER のトラックを選び、クリップを再生します。
 2. Move の **Record** を押して録音状態にします。
-3. Schwung の Driftbox 画面でノブを回します。回した動きがそのクリップに記録されます。
+3. Schwung の DRIFTER の画面でノブを回します。回した動きがそのクリップに記録されます。
 4. Record を止めます。以後、クリップがループするたびに記録した動きが再生されます。
 
 **消す**
@@ -203,7 +205,7 @@ VCO・ミキサー・VCF はホストの 2 倍（88.2 kHz）で計算し、31 �
 Schwung のプラグイン API ヘッダー（`third_party/schwung/host/plugin_api_v1.h`、Schwung 1.7.3 からそのまま）を同梱しているので、このリポジトリだけでビルドできます。
 
 ```bash
-scripts/build.sh arm64      # dist/driftbox/dsp.so と dist/driftbox-module.tar.gz
+scripts/build.sh arm64      # dist/drifter/dsp.so と dist/drifter-module.tar.gz
 scripts/build.sh native     # テスト用のデスクトップ版 dsp.so
 scripts/test.sh             # 全テスト + ARM64 ビルド（--quick で 60 秒のストレステストを省略）
 ```
@@ -222,7 +224,7 @@ scripts/build.sh arm64
 python3 scripts/install.py http://<MoveのIPアドレス>:7700
 ```
 
-`dist/driftbox-module.tar.gz` を Schwung Manager のカスタムモジュール・インストールに送ります。Releases からダウンロードした tarball を入れるときは `--package <ファイル>` を付けます。Manager の Web 画面から同じ tarball を入れても構いません。`modules/sound_generators/driftbox/` に入ります。
+`dist/drifter-module.tar.gz` を Schwung Manager のカスタムモジュール・インストールに送ります。Releases からダウンロードした tarball を入れるときは `--package <ファイル>` を付けます。Manager の Web 画面から同じ tarball を入れても構いません。`modules/sound_generators/drifter/` に入ります。
 
 **インストール・更新のあとは Move を再起動してください。**
 

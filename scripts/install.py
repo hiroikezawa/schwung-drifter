@@ -9,7 +9,7 @@ import urllib.parse
 import urllib.request
 import uuid
 
-ID = "driftbox"
+ID = "drifter"
 
 def install(base, package, check=False):
     parsed = urllib.parse.urlparse(base)

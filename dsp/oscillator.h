@@ -1,4 +1,4 @@
-/* Driftbox SIII - one VCO. MIT.
+/* DRIFTER - one VCO. MIT.
  *
  * Five selectable waveforms per VCO. REON confirms "5 waveforms each,
  * including noise" for the SIII, but not which five. The set below is a

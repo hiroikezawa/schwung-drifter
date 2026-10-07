@@ -1,6 +1,6 @@
-# Third-party code in Driftbox SIII
+# Third-party code in DRIFTER
 
-Driftbox SIII itself is MIT licensed (see `LICENSE`), Copyright (c) 2026 Hiro Ikezawa.
+DRIFTER itself is MIT licensed (see `LICENSE`), Copyright (c) 2026 Hiro Ikezawa.
 
 The synth engine is original code written for this module. "driftbox" and
 "REON" are used only to describe what inspired it; it is not affiliated with

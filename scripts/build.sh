@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Build the Driftbox SIII module.
+# Build the DRIFTER module.
 #   scripts/build.sh native   desktop dsp.so for the tests (build/native)
 #   scripts/build.sh arm64    Move dsp.so + install tarball (dist/)
 set -euo pipefail
-ID=driftbox
+ID=drifter
 MODULE="$(cd "$(dirname "$0")/.." && pwd)"
 # Schwung's plugin API header ships in third_party/schwung (MIT, see its
 # LICENSE), unmodified.

@@ -1,4 +1,4 @@
-/* Driftbox SIII engine tests. Built with ASan/UBSan by scripts/test.sh.
+/* DRIFTER engine tests. Built with ASan/UBSan by scripts/test.sh.
  *   test-engine            all tests (includes a 60 s stress render)
  *   test-engine --quick    skips the 60 s stress render
  *   bench --bench          realtime factor

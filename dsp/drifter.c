@@ -1,4 +1,4 @@
-/* Driftbox SIII - Schwung plugin API v2 adapter. MIT.
+/* DRIFTER - Schwung plugin API v2 adapter. MIT.
  *
  * Inspired by the REON driftbox SIII. Not affiliated with or endorsed by REON.
  *
@@ -62,7 +62,7 @@ static const host_api_v1_t *g_host;
  * module.json hierarchy is never read. */
 static const char db_hierarchy[] =
     "{\"modes\":null,\"levels\":{"
-      "\"root\":{\"label\":\"Driftbox SIII\","
+      "\"root\":{\"label\":\"DRIFTER\","
         "\"knobs\":[\"volume\",\"drift_x\",\"drift_y\",\"vco1_freq\",\"vco1_mod\",\"vco2_freq\",\"vco2_mod\",\"vcf_cut\"],"
         "\"params\":[\"volume\",\"drift_x\",\"drift_y\",\"vco1_freq\",\"vco1_mod\",\"vco2_freq\",\"vco2_mod\",\"vcf_cut\","
           "{\"level\":\"vcfdly\",\"label\":\"VCF/DLY\"},{\"level\":\"vco\",\"label\":\"VCO\"},{\"level\":\"mod\",\"label\":\"MOD/LFO\"}]},"
