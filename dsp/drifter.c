@@ -22,6 +22,7 @@
 
 _Static_assert(ATOMIC_INT_LOCK_FREE == 2, "instance pool needs lock-free atomics");
 _Static_assert(MOVE_FRAMES_PER_BLOCK <= DB_MAX_FRAMES, "block larger than the engine's");
+_Static_assert(DP_SUB == DP_COUNT - 1, "a v1 state is v2 minus its LAST value, which must be SUB");
 _Static_assert(sizeof(db_param_options) / sizeof(db_param_options[0]) == DP_COUNT,
                "module.json and db_params disagree on the parameter count");
 
@@ -57,24 +58,26 @@ static db_instance g_pool[DB_INSTANCES];
 static float g_sr = (float)MOVE_SAMPLE_RATE;
 static const host_api_v1_t *g_host;
 
-/* Stock knob grid: MAIN (volume and the DRIFT joystick first), then VCF/DLY,
- * VCO and MOD/LFO pages. Served from get_param -- a sound generator's
+/* Stock knob grid, in signal order -- DRIFT, then the oscillators, then the
+ * filter -- with what is played on the first two pages (MAIN, MIX/VCF) and
+ * what is set once (waveforms, modes, routing switches) behind them on
+ * SETUP 1 and SETUP 2. Served from get_param -- a sound generator's
  * module.json hierarchy is never read. */
 static const char db_hierarchy[] =
     "{\"modes\":null,\"levels\":{"
       "\"root\":{\"label\":\"DRIFTER\","
-        "\"knobs\":[\"volume\",\"drift_x\",\"drift_y\",\"vco1_freq\",\"vco1_mod\",\"vco2_freq\",\"vco2_mod\",\"vcf_cut\"],"
-        "\"params\":[\"volume\",\"drift_x\",\"drift_y\",\"vco1_freq\",\"vco1_mod\",\"vco2_freq\",\"vco2_mod\",\"vcf_cut\","
-          "{\"level\":\"vcfdly\",\"label\":\"VCF/DLY\"},{\"level\":\"vco\",\"label\":\"VCO\"},{\"level\":\"mod\",\"label\":\"MOD/LFO\"}]},"
-      "\"vcfdly\":{\"label\":\"VCF/DLY\","
-        "\"knobs\":[\"vcf_reso\",\"delay_time\",\"delay_feedback\",\"drift_x_target\",\"drift_y_target\",\"trigger\"],"
-        "\"params\":[\"vcf_reso\",\"delay_time\",\"delay_feedback\",\"drift_x_target\",\"drift_y_target\",\"trigger\"]},"
-      "\"vco\":{\"label\":\"VCO\","
-        "\"knobs\":[\"vco1_wave\",\"vco1_mode\",\"vco1_lfo\",\"vco1_vol\",\"vco2_wave\",\"vco2_mode\",\"vco2_lfo\",\"vco2_vol\"],"
-        "\"params\":[\"vco1_wave\",\"vco1_mode\",\"vco1_lfo\",\"vco1_vol\",\"vco2_wave\",\"vco2_mode\",\"vco2_lfo\",\"vco2_vol\"]},"
-      "\"mod\":{\"label\":\"MOD/LFO\","
-        "\"knobs\":[\"vcf_mod\",\"vcf_vco1\",\"vcf_vco2\",\"vcf_lfo\",\"lfo_rate\",\"lfo_wave\",\"gate_hold\"],"
-        "\"params\":[\"vcf_mod\",\"vcf_vco1\",\"vcf_vco2\",\"vcf_lfo\",\"lfo_rate\",\"lfo_wave\",\"gate_hold\"]}"
+        "\"knobs\":[\"volume\",\"drift_x\",\"drift_y\",\"vco1_freq\",\"vco1_mod\",\"vco2_freq\",\"vco2_mod\",\"sub\"],"
+        "\"params\":[\"volume\",\"drift_x\",\"drift_y\",\"vco1_freq\",\"vco1_mod\",\"vco2_freq\",\"vco2_mod\",\"sub\","
+          "{\"level\":\"mixvcf\",\"label\":\"MIX/VCF\"},{\"level\":\"setup1\",\"label\":\"SETUP 1\"},{\"level\":\"setup2\",\"label\":\"SETUP 2\"}]},"
+      "\"mixvcf\":{\"label\":\"MIX/VCF\","
+        "\"knobs\":[\"vco1_vol\",\"vco2_vol\",\"vcf_cut\",\"vcf_reso\",\"vcf_mod\",\"lfo_rate\",\"delay_time\",\"delay_feedback\"],"
+        "\"params\":[\"vco1_vol\",\"vco2_vol\",\"vcf_cut\",\"vcf_reso\",\"vcf_mod\",\"lfo_rate\",\"delay_time\",\"delay_feedback\"]},"
+      "\"setup1\":{\"label\":\"SETUP 1\","
+        "\"knobs\":[\"drift_x_target\",\"drift_y_target\",\"vco1_wave\",\"vco1_mode\",\"vco2_wave\",\"vco2_mode\",\"vco1_lfo\",\"vco2_lfo\"],"
+        "\"params\":[\"drift_x_target\",\"drift_y_target\",\"vco1_wave\",\"vco1_mode\",\"vco2_wave\",\"vco2_mode\",\"vco1_lfo\",\"vco2_lfo\"]},"
+      "\"setup2\":{\"label\":\"SETUP 2\","
+        "\"knobs\":[\"vcf_vco1\",\"vcf_vco2\",\"vcf_lfo\",\"lfo_wave\",\"gate_hold\",\"trigger\"],"
+        "\"params\":[\"vcf_vco1\",\"vcf_vco2\",\"vcf_lfo\",\"lfo_wave\",\"gate_hold\",\"trigger\"]}"
     "}}";
 
 /* ---- lifecycle ---------------------------------------------------------- */
@@ -177,8 +180,10 @@ static int parse_value(int idx, const char *s, float *out) {
     return 0;
 }
 
-/* ---- state blob: {"v":1,"p":[every parameter but TRIGGER, in order]} ------
- * Applied only if every value is valid and in range. */
+/* ---- state blob: {"v":2,"p":[every parameter but TRIGGER, in order]} ------
+ * Applied only if every value is valid and in range. v1 (before 0.6.0) has no
+ * SUB value -- SUB is the LAST parameter, so v1 is v2 minus its final entry --
+ * and loads with SUB at its default. */
 #define DB_STATE_MAX 2048
 #define DB_STATE_COUNT (DP_COUNT - 1)
 
@@ -228,20 +233,23 @@ static int restore_state(db_engine *e, const char *text) {
     if (*s != '{') return 0;
     float v, prm[DP_COUNT];
     const char *p = find_key(s, "v");
-    if (!p || !read_number(p, &v) || v != 1.0f) return 0;
+    if (!p || !read_number(p, &v) || (v != 1.0f && v != 2.0f)) return 0;
+    const int legacy = v == 1.0f;
+    const int count = legacy ? DB_STATE_COUNT - 1 : DB_STATE_COUNT;
     p = find_key(s, "p");
     if (!p || *p != '[') return 0;
     p = skip_ws(p + 1);
     int n = 0;
+    prm[DP_SUB] = db_params[DP_SUB].def;
     for (int i = 0; i < DP_COUNT; ++i) {
-        if (i == DP_TRIGGER) continue;
+        if (i == DP_TRIGGER || (legacy && i == DP_SUB)) continue;
         p = read_number(p, &prm[i]);
         if (!p) return 0;
         const db_param_info *pi = &db_params[i];
         if (prm[i] < pi->min || prm[i] > pi->max) return 0;
         if (pi->is_int && prm[i] != floorf(prm[i])) return 0;
         p = skip_ws(p);
-        if (++n < DB_STATE_COUNT) {
+        if (++n < count) {
             if (*p != ',') return 0;
             p = skip_ws(p + 1);
         }
@@ -253,7 +261,7 @@ static int restore_state(db_engine *e, const char *text) {
 }
 
 static int write_state(const db_engine *e, char *buf, int size) {
-    int n = snprintf(buf, size, "{\"v\":1,\"p\":[");
+    int n = snprintf(buf, size, "{\"v\":2,\"p\":[");
     int first = 1;
     for (int i = 0; i < DP_COUNT && n > 0 && n < size; ++i) {
         if (i == DP_TRIGGER) continue;

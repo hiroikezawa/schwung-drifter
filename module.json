@@ -2,7 +2,7 @@
   "id": "drifter",
   "name": "DRIFTER",
   "abbrev": "DRFT",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Mono 2-VCO cross-mod synth inspired by the REON driftbox SIII: FM/sync, audio-rate VCF mod, ladder VCF, LFO, delay, DRIFT X/Y",
   "author": "Hiro Ikezawa",
   "api_version": 2,
@@ -22,7 +22,7 @@
       {"key":"vco1_mode","name":"VCO1 FM/Sync","short_name":"V1 F/S","type":"enum","options":["FM","Sync"],"default":0},
       {"key":"vco1_lfo","name":"LFO to VCO1","short_name":"LFO>V1","type":"enum","options":["Off","On"],"default":0},
       {"key":"vco1_vol","name":"VCO1 Vol","short_name":"V1 VOL","type":"float","min":0,"max":1,"step":0.01,"default":0.8,"unit":"%"},
-      {"key":"vco2_freq","name":"VCO2 Freq","short_name":"V2 FRQ","type":"float","min":0,"max":1,"step":0.01,"default":0.5655,"unit":"%"},
+      {"key":"vco2_freq","name":"VCO2 Freq","short_name":"V2 FRQ","type":"float","min":0,"max":1,"step":0.01,"default":0.565526,"unit":"%"},
       {"key":"vco2_mod","name":"VCO2 Mod","short_name":"V2 MOD","type":"float","min":0,"max":1,"step":0.01,"default":0,"unit":"%"},
       {"key":"vco2_wave","name":"VCO2 Wave","short_name":"V2 WAV","type":"enum","options":["Saw","Tri","Sqr","Puls","Nois"],"default":2},
       {"key":"vco2_mode","name":"VCO2 FM/Sync","short_name":"V2 F/S","type":"enum","options":["FM","Sync"],"default":0},
@@ -44,7 +44,8 @@
       {"key":"drift_y_target","name":"Y Target","short_name":"Y TGT","type":"enum","options":["VCF","F.B"],"default":0},
       {"key":"gate_hold","name":"Gate Hold","short_name":"HOLD","type":"enum","options":["Off","Play","Always"],"default":1},
       {"key":"trigger","name":"Trigger","short_name":"TRIG","type":"enum","options":["-","Trig"],"default":0,"access":"write"},
-      {"key":"volume","name":"Volume","short_name":"VOLUME","type":"float","min":0,"max":1,"step":0.01,"default":0.7,"unit":"%"}
+      {"key":"volume","name":"Volume","short_name":"VOLUME","type":"float","min":0,"max":1,"step":0.01,"default":0.7,"unit":"%"},
+      {"key":"sub","name":"Sub","short_name":"SUB","type":"float","min":0,"max":1,"step":0.01,"default":0.5,"unit":"%"}
     ]
   }
 }

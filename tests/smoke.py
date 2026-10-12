@@ -103,25 +103,25 @@ def freq(samples):
 manifest = json.loads((pathlib.Path(__file__).parent.parent / "module.json").read_text())
 assert manifest["component_type"] == "sound_generator" and manifest["capabilities"]["chainable"]
 meta = json.loads(read("chain_params"))
-assert meta == manifest["capabilities"]["chain_params"] and len(meta) == 29
+assert meta == manifest["capabilities"]["chain_params"] and len(meta) == 30
 STABLE = """vco1_freq vco1_mod vco1_wave vco1_mode vco1_lfo vco1_vol
 vco2_freq vco2_mod vco2_wave vco2_mode vco2_lfo vco2_vol
 vcf_cut vcf_reso vcf_mod vcf_vco1 vcf_vco2 vcf_lfo lfo_rate lfo_wave
 delay_time delay_feedback drift_x drift_x_target drift_y drift_y_target
-gate_hold trigger volume""".split()
+gate_hold trigger volume sub""".split()
 assert [m["key"] for m in meta] == STABLE, "stable parameter IDs"
 keys = {m["key"] for m in meta}
 h = json.loads(read("ui_hierarchy"))
 L = h["levels"]
 assert L["root"]["knobs"] == ["volume", "drift_x", "drift_y", "vco1_freq",
-                              "vco1_mod", "vco2_freq", "vco2_mod", "vcf_cut"]
-assert L["vcfdly"]["knobs"] == ["vcf_reso", "delay_time", "delay_feedback",
-                                "drift_x_target", "drift_y_target", "trigger"]
-assert L["vco"]["knobs"] == ["vco1_wave", "vco1_mode", "vco1_lfo", "vco1_vol",
-                             "vco2_wave", "vco2_mode", "vco2_lfo", "vco2_vol"]
-assert L["mod"]["knobs"] == ["vcf_mod", "vcf_vco1", "vcf_vco2", "vcf_lfo",
-                             "lfo_rate", "lfo_wave", "gate_hold"]
-assert [e["level"] for e in L["root"]["params"] if isinstance(e, dict)] == ["vcfdly", "vco", "mod"]
+                              "vco1_mod", "vco2_freq", "vco2_mod", "sub"]
+assert L["mixvcf"]["knobs"] == ["vco1_vol", "vco2_vol", "vcf_cut", "vcf_reso",
+                                "vcf_mod", "lfo_rate", "delay_time", "delay_feedback"]
+assert L["setup1"]["knobs"] == ["drift_x_target", "drift_y_target", "vco1_wave", "vco1_mode",
+                                "vco2_wave", "vco2_mode", "vco1_lfo", "vco2_lfo"]
+assert L["setup2"]["knobs"] == ["vcf_vco1", "vcf_vco2", "vcf_lfo", "lfo_wave",
+                                "gate_hold", "trigger"]
+assert [e["level"] for e in L["root"]["params"] if isinstance(e, dict)] == ["mixvcf", "setup1", "setup2"]
 on_pages = [k for lvl in L.values() for k in lvl["knobs"]]
 assert sorted(on_pages) == sorted(STABLE) and len(set(on_pages)) == len(on_pages), \
     "every parameter on exactly one page"
@@ -161,15 +161,23 @@ write("vcf_cut", 0.7)
 write("vco1_mod", 0.61); write("vco2_wave", 4); write("drift_x", -0.25)
 blob = read("state")
 st = json.loads(blob)
-assert st["v"] == 1 and len(st["p"]) == 28, "every parameter but TRIGGER"
+assert st["v"] == 2 and len(st["p"]) == 29, "every parameter but TRIGGER"
 q = create(b".", None)
 write("state", blob, inst=q)
 assert read("state", inst=q) == blob
 assert read("drift_x", inst=q) == "-0.2500"
-for badblob in ['{"v":1,"p":[1,2]}', blob.replace('"v":1', '"v":2'),
+for badblob in ['{"v":2,"p":[1,2]}', blob.replace('"v":2', '"v":3'),
+                blob.replace('"v":2', '"v":1'),            # v1 has one value fewer
                 blob.replace("0.6100", "NaN"), blob.replace("0.6100", "7"), "junk"]:
     write("state", badblob, inst=q)
     assert read("state", inst=q) == blob, badblob
+# a 0.5.0 (v1) state has no SUB: it loads, and SUB takes its default
+v1 = json.dumps({"v": 1, "p": st["p"][:-1]}, separators=(",", ":"))
+r = create(b".", None)
+write("sub", 0.9, inst=r)
+write("state", v1, inst=r)
+assert read("drift_x", inst=r) == "-0.2500" and read("sub", inst=r) == "0.5000", "v1 state loads"
+destroy(r)
 destroy(q)
 for k in ("vco1_mod", "vco2_wave", "drift_x"):
     write(k, next(m for m in meta if m["key"] == k)["default"])

@@ -67,6 +67,7 @@ static void init_plain(db_engine *e, float sr) {
     set(e, DP_DELAY_FB, 0.0f);
     set(e, DP_VOLUME, 1.0f);
     set(e, DP_GATE_HOLD, 0.0f);    /* default Play (0.3.0): tests gate by note */
+    set(e, DP_SUB, 0.0f);          /* default 0.5 (0.6.0): VCO pitch tests hear VCO1 alone */
     db_engine_restart(e);          /* smoothed values start AT these settings */
 }
 
@@ -459,6 +460,41 @@ static void test_drift(void) {
     CHECK(tails[1] > 4.0 * tails[0], "DRIFT Y on F.B lengthens the tail (%g vs %g)", tails[1], tails[0]);
 }
 
+/* ---- SUB: a sine an octave below VCO1, after the VCF -------------------------- */
+static double goertzel(int from, int len, float sr, float hz) {
+    double w = 2.0 * M_PI * hz / sr, c = 2.0 * cos(w), s0, s1 = 0.0, s2 = 0.0;
+    for (int i = 0; i < len; ++i) { s0 = cap[from + i] + c * s1 - s2; s2 = s1; s1 = s0; }
+    return sqrt(s1 * s1 + s2 * s2 - c * s1 * s2) / len;
+}
+
+static void test_sub(void) {
+    double lvl[2];
+    for (int k = 0; k < 2; ++k) {
+        init_plain(&E, SR);
+        set(&E, DP_VCF_CUT, 0.45f);            /* ~370 Hz: the VCF thins the VCO's bass */
+        set(&E, DP_VCF_RESO, 0.9f);            /* and resonance thins it more */
+        set(&E, DP_SUB, k ? 1.0f : 0.0f);
+        db_engine_set_gate(&E, 1, 48);         /* VCO1 130.8 Hz -> SUB 65.4 Hz */
+        run(&E, 0.5f);
+        lvl[k] = goertzel(8820, 8192, SR, 65.41f);
+    }
+    CHECK(lvl[1] > 0.1 && lvl[1] > 20.0 * lvl[0], "SUB adds the octave below (%g vs %g)", lvl[1], lvl[0]);
+    /* it follows VCO1's pitch BEFORE FM: heavy FM leaves it in place */
+    init_plain(&E, SR);
+    set(&E, DP_SUB, 1.0f);
+    set(&E, DP_VCO1_VOL, 0.0f);
+    set(&E, DP_VCO1_MOD, 1.0f);
+    db_engine_set_gate(&E, 1, 48);
+    run(&E, 0.5f);
+    CHECK(goertzel(8820, 8192, SR, 65.41f) > 0.1, "SUB steady under max FM");
+    /* and the default patch keeps peak below full scale */
+    db_engine_init(&E, SR);
+    set(&E, DP_VOLUME, 1.0f);
+    db_engine_set_gate(&E, 1, 36);
+    stats s = run(&E, 1.0f);
+    CHECK(s.peak <= 1.0 && s.nonfinite == 0 && E.resets == 0, "default + SUB bounded (%g)", s.peak);
+}
+
 /* ---- 18: stress --------------------------------------------------------------------- */
 static void all_max(db_engine *e) {
     set(e, DP_VCO1_MOD, 1.0f); set(e, DP_VCO2_MOD, 1.0f);
@@ -469,7 +505,7 @@ static void all_max(db_engine *e) {
     set(e, DP_VCF_VCO1, 1.0f); set(e, DP_VCF_VCO2, 1.0f); set(e, DP_VCF_LFO, 1.0f);
     set(e, DP_LFO_RATE, 1.0f); set(e, DP_LFO_WAVE, 1.0f);
     set(e, DP_DELAY_FB, 1.0f); set(e, DP_DRIFT_X, 1.0f); set(e, DP_DRIFT_Y, 1.0f);
-    set(e, DP_GATE_HOLD, (float)DB_HOLD_ALWAYS); set(e, DP_VOLUME, 1.0f);
+    set(e, DP_GATE_HOLD, (float)DB_HOLD_ALWAYS); set(e, DP_VOLUME, 1.0f); set(e, DP_SUB, 1.0f);
 }
 
 static void test_stress(float seconds) {
@@ -574,6 +610,7 @@ int main(int argc, char **argv) {
     test_lfo();
     test_delay();
     test_drift();
+    test_sub();
     test_stress(quick ? 5.0f : 60.0f);
     printf("%s: %d checks\n", g_fail ? "FAILED" : "PASS: engine", g_checks);
     return g_fail;

@@ -12,7 +12,7 @@ const db_param_info db_params[DP_COUNT] = {
     {"vco1_mode", 0.0f, 1.0f, 0.0f, 1},
     {"vco1_lfo", 0.0f, 1.0f, 0.0f, 1},
     {"vco1_vol", 0.0f, 1.0f, 0.8f, 0},
-    {"vco2_freq", 0.0f, 1.0f, 0.5655f, 0},
+    {"vco2_freq", 0.0f, 1.0f, 0.565526f, 0},
     {"vco2_mod", 0.0f, 1.0f, 0.0f, 0},
     {"vco2_wave", 0.0f, 4.0f, 2.0f, 1},
     {"vco2_mode", 0.0f, 1.0f, 0.0f, 1},
@@ -35,6 +35,7 @@ const db_param_info db_params[DP_COUNT] = {
     {"gate_hold", 0.0f, 2.0f, 1.0f, 1},
     {"trigger", 0.0f, 1.0f, 0.0f, 1},
     {"volume", 0.0f, 1.0f, 0.7f, 0},
+    {"sub", 0.0f, 1.0f, 0.5f, 0},
 };
 
 /* ---- knob maps --------------------------------------------------------- */
@@ -99,6 +100,11 @@ void db_engine_restart(db_engine *e) {
     e->p_oct[0] = vco_oct(e->param[DP_VCO1_FREQ]);
     e->p_oct[1] = vco_oct(e->param[DP_VCO2_FREQ]);
     e->cut_oct = cut_oct(e->param[DP_VCF_CUT]);
+    /* in phase with VCO2's start: at the default VCO2 is exactly an octave
+     * below VCO1, i.e. on the SUB's own pitch, and a square's fundamental is
+     * in phase with its ramp -- so the two add instead of cancelling */
+    e->sub_phase = e->osc[1].phase;
+    e->sub_s = e->param[DP_SUB];
     e->vol_mix[0] = e->param[DP_VCO1_VOL];
     e->vol_mix[1] = e->param[DP_VCO2_VOL];
     e->vca = 0.0f;
@@ -175,7 +181,7 @@ static inline float soft_clip(float x) {
 static int engine_finite(const db_engine *e) {
     float acc = e->osc[0].phase + e->osc[1].phase + e->last[0] + e->last[1]
               + e->p_oct[0] + e->p_oct[1] + e->cut_oct + e->lfo_phase + e->lfo_sq
-              + e->vcf.s[0] + e->vcf.s[1] + e->vcf.s[2] + e->vcf.s[3]
+              + e->sub_phase + e->sub_s + e->vcf.s[0] + e->vcf.s[1] + e->vcf.s[2] + e->vcf.s[3]
               + e->vca + e->dly.t_s + e->dly.lp + e->dly.hp_x + e->dly.hp_y
               + e->dc_x + e->dc_y + e->lim_gain + e->vol_s;
     for (int i = 0; i < 2 * DB_HB_TAPS; ++i) acc += e->hist[i];
@@ -234,6 +240,7 @@ void db_engine_render(db_engine *e, float *out, int frames) {
     const int hold = hold_mode == DB_HOLD_ALWAYS ||
                      (hold_mode == DB_HOLD_PLAY && e->transport);
     const float vol = P[DP_VOLUME];
+    const float sub_t = P[DP_SUB] * DB_SUB_GAIN;
 
     for (int i = 0; i < frames; ++i) {
         for (int j = 0; j < DB_OS; ++j) {
@@ -279,7 +286,18 @@ void db_engine_render(db_engine *e, float *out, int frames) {
             float g = db_tan(pi_osr * db_exp2(c));
             /* a whisper of noise lets a self-oscillating VCF start on its own */
             float x = mix * in_gain + 1e-5f * db_noise(&e->rng);
-            hb_push(e, ladder_process(&e->vcf, x, g, k));
+            float yv = ladder_process(&e->vcf, x, g, k);
+
+            /* SUB: a sine one octave below VCO1's own pitch -- before FM, so
+             * it stays a steady fundamental however hard the VCOs fight --
+             * added AFTER the VCF, so neither a closed cutoff nor the
+             * ladder's bass loss at high resonance can thin it. */
+            float sinc = db_exp2(db_clampf(e->p_oct[0] - 1.0f, oct_min, oct_max)) / osr;
+            float sp = e->sub_phase + (sinc > 0.45f ? 0.45f : sinc);
+            if (sp >= 1.0f) { sp -= 1.0f; if (sp >= 1.0f) sp = 0.0f; }
+            e->sub_phase = sp;
+            e->sub_s += (sub_t - e->sub_s) * e->sm_coef;
+            hb_push(e, yv + e->sub_s * sinf(2.0f * DB_PI * sp));
         }
         float y = hb_out(e);
 
@@ -296,7 +314,7 @@ void db_engine_render(db_engine *e, float *out, int frames) {
         float wet_t = fminf(1.0f, 2.5f * e->fb_s) * 0.8f;
         e->wet_s += (wet_t - e->wet_s) * e->fb_coef;
         float d = delay_process(&e->dly, s, dly_t, fbg, e->t_coef, lp_coef, hp_r);
-        float m = 1.6f * (s + e->wet_s * d);   /* output makeup (0.2.0: +6 dB) */
+        float m = 1.1f * (s + e->wet_s * d);   /* output makeup (0.6.0: room for SUB) */
 
         /* DC blocker, emergency limiter, soft clip */
         float yo = m - e->dc_x + e->dc_r * e->dc_y;

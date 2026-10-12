@@ -36,6 +36,7 @@ enum {
     DP_DELAY_TIME, DP_DELAY_FB,
     DP_DRIFT_X, DP_DRIFT_X_TGT, DP_DRIFT_Y, DP_DRIFT_Y_TGT,
     DP_GATE_HOLD, DP_TRIGGER, DP_VOLUME,
+    DP_SUB,                 /* appended in 0.6.0: keys before it keep their order */
     DP_COUNT
 };
 
@@ -71,6 +72,7 @@ extern const db_param_info db_params[DP_COUNT];
 #define DB_DRIFT_Y_OCT 5.0f        /* Y on VCF: +-5 octaves */
 #define DB_DRIFT_Y_FB 0.6f         /* Y on F.B: +-0.6 of feedback */
 #define DB_TRIG_S 0.2f             /* TRIGGER opens the gate this long */
+#define DB_SUB_GAIN 1.0f           /* SUB = 1: sine peak, after the VCF */
 
 float db_vco_hz(float v);          /* FREQ knob -> Hz at the reference note */
 float db_cut_hz(float v);
@@ -92,6 +94,7 @@ typedef struct {
     /* smoothed controls (per oversampled sample) */
     float p_oct[2];         /* log2 Hz */
     float cut_oct;
+    float sub_phase, sub_s; /* SUB: sine an octave below VCO1, level smoothed */
     float vol_mix[2];
     float sm_coef, sq_coef;
 
