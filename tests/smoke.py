@@ -102,6 +102,7 @@ def freq(samples):
 # --- contract with the shadow UI ----------------------------------------------
 manifest = json.loads((pathlib.Path(__file__).parent.parent / "module.json").read_text())
 assert manifest["component_type"] == "sound_generator" and manifest["capabilities"]["chainable"]
+assert manifest["ui_chain"] == "ui_chain.js"
 meta = json.loads(read("chain_params"))
 assert meta == manifest["capabilities"]["chain_params"] and len(meta) == 30
 STABLE = """vco1_freq vco1_mod vco1_wave vco1_mode vco1_lfo vco1_vol
@@ -111,7 +112,10 @@ delay_time delay_feedback drift_x drift_x_target drift_y drift_y_target
 gate_hold trigger volume sub""".split()
 assert [m["key"] for m in meta] == STABLE, "stable parameter IDs"
 keys = {m["key"] for m in meta}
-h = json.loads(read("ui_hierarchy"))
+assert read("ui_hierarchy") == "", "served empty: the shadow UI then opens ui_chain.js"
+grid = read("grid_hierarchy")
+h = json.loads(grid)
+(pathlib.Path(LIB).parent / "grid_hierarchy.json").write_text(grid)   # for tests/test_ui.mjs
 L = h["levels"]
 assert L["root"]["knobs"] == ["volume", "drift_x", "drift_y", "vco1_freq",
                               "vco1_mod", "vco2_freq", "vco2_mod", "sub"]

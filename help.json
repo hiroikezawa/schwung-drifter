@@ -57,6 +57,17 @@
       ]
     },
     {
+      "title": "RANDOM pad",
+      "lines": [
+        "Screen open: top-right",
+        "pad = RANDOM. New",
+        "values for every knob",
+        "but VOLUME HOLD DRIFT",
+        "X/Y TGT and SUB.",
+        "Other pads: unused."
+      ]
+    },
+    {
       "title": "Bass",
       "lines": [
         "SUB: sine one octave",

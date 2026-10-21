@@ -61,8 +61,7 @@ static const host_api_v1_t *g_host;
 /* Stock knob grid, in signal order -- DRIFT, then the oscillators, then the
  * filter -- with what is played on the first two pages (MAIN, MIX/VCF) and
  * what is set once (waveforms, modes, routing switches) behind them on
- * SETUP 1 and SETUP 2. Served from get_param -- a sound generator's
- * module.json hierarchy is never read. */
+ * SETUP 1 and SETUP 2. Served as grid_hierarchy (see get_param). */
 static const char db_hierarchy[] =
     "{\"modes\":null,\"levels\":{"
       "\"root\":{\"label\":\"DRIFTER\","
@@ -306,7 +305,12 @@ static int get_param(void *ptr, const char *key, char *buf, int size) {
     }
     else if (!strcmp(key, "state")) return write_state(e, buf, size);
     else if (!strcmp(key, "chain_params")) return copy_text(buf, size, db_chain_params);
-    else if (!strcmp(key, "ui_hierarchy")) return copy_text(buf, size, db_hierarchy);
+    /* ui_hierarchy is served EMPTY on purpose: with a hierarchy there the
+     * shadow UI draws its stock grid itself and never opens ui_chain.js, which
+     * is what takes the pads (the RANDOM pad). ui_chain.js draws the same grid
+     * from grid_hierarchy with Schwung's own page engine. */
+    else if (!strcmp(key, "ui_hierarchy")) return 0;
+    else if (!strcmp(key, "grid_hierarchy")) return copy_text(buf, size, db_hierarchy);
     if (n < 0 || n >= size) { buf[0] = 0; return -1; }
     return n;
 }
