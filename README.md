@@ -1,351 +1,567 @@
-# Drifter（schwung-drifter）
+# Drifter (schwung-drifter)
 
-Ableton Move 上の Schwung で動く、**低音の強いカオティック・ドローン専用の音源**です（Schwung の sound generator モジュール）。Move の再生ボタンを押すと鳴り始め、停止すると消えます。鍵盤で弾くシンセではありません。
+**English** | [日本語](README.ja.md)
 
-> REON driftbox SIII に着想を得たモジュールです。
-> REON とは無関係で、REON の承認も受けていません。
+**An instrument made only for chaotic drones with a strong low end**, running on
+Schwung on Ableton Move (a Schwung sound generator module). It starts sounding
+when you press Move's Play button and goes silent when you stop. It is not a
+synth you play from a keyboard.
 
-REON が公開している機能一覧と一般的な DSP 技術だけをもとに、ゼロから書いた実装（クリーンルーム実装）です。REON 製品のファームウェア・コード・回路は一切使っていません。実機の忠実なクローンも目指していません。
+> A module inspired by the REON driftbox SIII.
+> It has no connection with REON and is not endorsed by REON.
 
----
-
-## 概要
-
-音の中心は、2 つの VCO の**クロス FM** と**ハードシンク**です。
-
-- 2 つの VCO がオーディオレートでお互いの周波数を揺らし合い（クロス FM）、同時に VCO1 が VCO2 の周期を強制的にリセットする（ハードシンク）。この 2 つを同時に使うのが初期設定（CHARACTER = FM+SYNC）
-- その下に、**FM の影響を一切受けない安定したサブベース（CLEAN SUB）**と、**揺らいで歪む低音（DIRTY SUB）**の 2 系統の低音を常に敷く
-- 24 dB/oct の非線形ラダー・フィルターを VCO でオーディオレート変調し（DRIFT Y）、金属的・荒々しい倍音を作る
-- **MOTION** ノブ 1 本で、FM・シンク・フィルターが自分でゆっくり（最大では不規則に）動き続ける
-- **RANDOM** パッドで、実際にトラックで使える範囲に絞ったドローンを一発で作る
-
-目指しているのは「暗い（DARK DRONE）」「工業的（INDUSTRIAL）」「カオティック（CHAOTIC）」が同居する音です。どんなに倍音が暴れても低音は痩せません。
-
-意図的に**入れていない**もの：ADSR などのエンベロープ、グライド、テンポ同期の LFO、ノートによる音程、ベロシティ、ピッチベンド、ポリフォニー、波形の選択、変調の細かい ON/OFF スイッチ。
-
-## 機能
-
-- VCO × 2：VCO1 = 矩形波（シンクのマスター）、VCO2 = ノコギリ波（シンクのスレーブ）。27.5 Hz（A0）〜440 Hz（A4）
-- クロス FM（双方向、オーディオレート）とハードシンク（VCO1 → VCO2 の一方向）。CHARACTER で FM / SYNC / FM+SYNC
-- 24 dB/oct 非線形ラダー・ローパス（ゼロディレイ・フィードバック型）、自己発振あり。VCO によるオーディオレート変調
-- BASS ENGINE：CLEAN SUB（サイン波）＋ DIRTY SUB（位相変調＋飽和）。VCO1 の音程を 40〜80 Hz に折りたたんだ音域で鳴る
-- MOTION ENGINE：速さの違う 5 本のゆっくりした変調（サイン＋なめらかなランダム）。BPM 同期なし、周期的なゲートなし
-- ディレイ：ノブ 1 本（時間・フィードバック・量が連動）
-- RANDOM パッド：スタイル 3 種（CHAOTIC / DARK / INDUSTRIAL）
-- Move の再生中だけ発音（開始・停止はフェード付き）
-- 出力はモノラル（左右同じ）
+It is written from scratch using only the feature list REON has published and
+general DSP techniques (a clean-room implementation). None of the firmware, code
+or circuits of REON's products are used. It does not aim to be a faithful clone of
+the hardware either.
 
 ---
 
-## 使い方（はじめての操作）
+## Overview
 
-### 1. スロットに読み込む
+At the heart of the sound are **cross FM** and **hard sync** between two VCOs.
 
-1. Schwung の画面を開き、使いたいトラックのスロットを選びます。
-2. Sound Generator の一覧から **Drifter** を選びます。
-3. **Move の再生ボタン（Play）を押します。** 約 20 ms でフェードインして、ドローンが鳴り始めます。
-4. 停止すると、約 30 ms でフェードアウトして無音になります（ディレイの残響も一緒に消えます）。
+- The two VCOs shake each other's frequency at audio rate (cross FM) while VCO1
+  forcibly resets VCO2's cycle (hard sync). Using both at once is the default
+  (CHARACTER = FM+SYNC)
+- Underneath, two kinds of low end are always laid down: **a stable sub bass
+  untouched by FM (CLEAN SUB)** and **a wavering, distorted low end (DIRTY SUB)**
+- A 24 dB/oct nonlinear ladder filter is modulated at audio rate by the VCOs
+  (DRIFT Y), creating metallic, rough harmonics
+- With the single **MOTION** knob, the FM, sync and filter keep moving by
+  themselves, slowly (irregularly at maximum)
+- The **RANDOM** pad makes, in one press, a drone limited to ranges that actually
+  work in a track
 
-クリップは空でもかまいません。ノートを入れる必要もありません（ノートを入れても音は変わりません）。
+The aim is a sound where "dark (DARK DRONE)", "industrial (INDUSTRIAL)" and
+"chaotic (CHAOTIC)" live together. However wild the harmonics get, the low end
+never thins out.
 
-モジュールを入れた直後（インストール・更新の直後）は、**必ず Move を再起動**してから使ってください。再起動しないと、古いモジュールと新しいモジュールが混ざった状態になり、ノブが効かないなどの不具合が起きます。
+Deliberately **not included**: envelopes such as ADSR, glide, tempo-synced LFOs,
+pitch from notes, velocity, pitch bend, polyphony, waveform selection, and fine
+on/off switches for modulation.
 
-### 2. まず触ってみるノブ（MAIN ページ）
+## Features
 
-1 ページ目の **MAIN** は演奏中に触るノブだけです。
+- 2 VCOs: VCO1 = square (sync master), VCO2 = sawtooth (sync slave). 27.5 Hz (A0)
+  to 440 Hz (A4)
+- Cross FM (both directions, audio rate) and hard sync (one way, VCO1 → VCO2).
+  CHARACTER chooses FM / SYNC / FM+SYNC
+- A 24 dB/oct nonlinear ladder low-pass (zero-delay feedback), self-oscillating.
+  Audio-rate modulation by the VCOs
+- BASS ENGINE: CLEAN SUB (sine) + DIRTY SUB (phase modulation + saturation),
+  sounding at VCO1's pitch folded into 40–80 Hz
+- MOTION ENGINE: 5 slow modulations at different speeds (sine + smooth random).
+  No BPM sync, no periodic gating
+- Delay: one knob (time, feedback and amount linked)
+- RANDOM pad: 3 styles (CHAOTIC / DARK / INDUSTRIAL)
+- Sounds only while Move is playing (with fades on start and stop)
+- Mono output (left and right the same)
 
-1. **ノブ 4（FM DRV）**：まずこれを回します。左側では穏やかな倍音、真ん中あたりで金属的、右に行くほどカオティックになります。
-2. **ノブ 5（SWEEP）**：ハードシンクの倍音を動かします。「ギュイーン」という倍音のスイープです。FM DRV とは別に動きます。
-3. **ノブ 6・7（CUTOFF / RESO）**：フィルターです。RESO を右いっぱい近くまで回すと自己発振が加わります。CUTOFF を閉じても低音（SUB）は残ります。
-4. **ノブ 2・3（DRFT X / DRFT Y）**：ジョイスティックです。真ん中が 0 で、左右どちらにも回せます。X は 2 つの VCO の周波数の比、Y はフィルターのオーディオレート変調です。どちらも**右に回すほど大きく高音側へ**動きます（低音は SUB が別に出しているので、上げても低音は残ります）。
-5. **ノブ 8（MOTION）**：0 だと音は止まった状態のまま。上げるほど音色が自分でゆっくり動き、右いっぱいでは不規則に暴れます。
-6. **ノブ 1（VOLUME）**：全体の音量です。
+---
 
-### 3. 音の土台を決める（SETUP ページ）
+## Getting started
 
-ジョグで 2 ページ目の **SETUP** に移ります。一度決めたらあまり触らない設定です。
+### 1. Load it into a slot
 
-1. **ノブ 1・2（V1 FRQ / V2 FRQ）**：ドローンの基本の音程です。初期値は VCO1 = 55 Hz（A1）、VCO2 = その 5 度上（わずかにずらしてうなりを出しています）。
-2. **ノブ 3（MIX）**：VCO1 と VCO2 の音量バランスです。
-3. **ノブ 4（BASS）**：低音の厚みです。
-4. **ノブ 5（DIRTY）**：低音の汚れ具合（揺れと歪み）です。
-5. **ノブ 6（DELAY）**：ディレイです。0 でなし、上げるほど長く・暗く・深くなります。
-6. **ノブ 7（CHAR）**：FM / SYNC / FM+SYNC（初期値）。
-7. **ノブ 8（STYLE）**：RANDOM パッドで作る音の方向です。
+1. Open Schwung's screen and choose the slot of the track you want to use.
+2. Choose **Drifter** from the Sound Generator list.
+3. **Press Move's Play button.** It fades in over about 20 ms and the drone starts.
+4. On stop it fades out over about 30 ms to silence (the delay's tail goes with it).
 
-### 4. RANDOM パッドで音を作る
+The clip can be empty. You do not need to put notes in it (notes do not change
+the sound).
 
-Drifter の画面を開いている間、**右上のパッドが RANDOM**（光ります）になります。押すたびに、SETUP の STYLE に合わせた新しいドローンになります。画面上部に一瞬「RANDOM CHAOTIC」などと出ます。
+Right after adding the module (right after installing or updating), **always
+restart Move** before using it. Without a restart, old and new versions of the
+module get mixed up, and problems such as knobs not working occur.
 
-- **変わるもの**：FM DRV、SWEEP、CUTOFF、RESO、MOTION、V1 FRQ、V2 FRQ、MIX、BASS、DIRTY、DELAY。
-- **0（中央）に戻るもの**：DRFT X / DRFT Y。作られた音から、ジョイスティックでどちらにも動かせる状態になります。
-- **変わらないもの**：VOLUME、CHAR、STYLE。
-- Move の Record をオンにしたまま押すと、ランダムな値への変化がオートメーションとして記録されます。
+### 2. Knobs to try first (MAIN page)
 
-**STYLE の違い**（どれも「太い低音＋複雑な倍音」が基本で、別ジャンルに分かれるわけではありません）
+Page 1, **MAIN**, holds only the knobs you touch while playing.
 
-| STYLE | 傾向 |
+1. **Knob 4 (FM DRV)**: turn this first. Gentle harmonics on the left, metallic
+   around the middle, more chaotic the further right.
+2. **Knob 5 (SWEEP)**: moves the hard-sync harmonics — the classic "nyeeow"
+   harmonic sweep. It moves separately from FM DRV.
+3. **Knobs 6 and 7 (CUTOFF / RESO)**: the filter. Turning RESO close to fully
+   right adds self-oscillation. The low end (SUB) stays even with CUTOFF closed.
+4. **Knobs 2 and 3 (DRFT X / DRFT Y)**: the joystick. The middle is 0, and both can
+   turn either way. X is the frequency ratio of the two VCOs, Y the filter's
+   audio-rate modulation. Both **move further towards the treble the further right
+   you turn** (the low end comes separately from the SUB, so it stays when you
+   turn them up).
+5. **Knob 8 (MOTION)**: at 0 the sound stays still. The higher it goes, the more
+   the timbre moves slowly by itself, and fully right it runs wild irregularly.
+6. **Knob 1 (VOLUME)**: overall level.
+
+### 3. Set the foundation (SETUP page)
+
+Move to page 2, **SETUP**, with the jog wheel. These are settings you rarely touch
+once set.
+
+1. **Knobs 1 and 2 (V1 FRQ / V2 FRQ)**: the drone's base pitches. Defaults are
+   VCO1 = 55 Hz (A1) and VCO2 = a fifth above it (detuned slightly to beat).
+2. **Knob 3 (MIX)**: the level balance of VCO1 and VCO2.
+3. **Knob 4 (BASS)**: thickness of the low end.
+4. **Knob 5 (DIRTY)**: how dirty the low end is (wobble and distortion).
+5. **Knob 6 (DELAY)**: the delay. None at 0; longer, darker and deeper as it goes up.
+6. **Knob 7 (CHAR)**: FM / SYNC / FM+SYNC (default).
+7. **Knob 8 (STYLE)**: the direction of the sounds the RANDOM pad makes.
+
+### 4. Making sounds with the RANDOM pad
+
+While the Drifter screen is open, **the top-right pad becomes RANDOM** (lit). Each
+press gives a new drone following SETUP's STYLE. The top of the screen briefly
+shows something like "RANDOM CHAOTIC".
+
+- **What changes**: FM DRV, SWEEP, CUTOFF, RESO, MOTION, V1 FRQ, V2 FRQ, MIX, BASS,
+  DIRTY, DELAY.
+- **What returns to 0 (centre)**: DRFT X / DRFT Y, so from the new sound you can
+  move the joystick either way.
+- **What does not change**: VOLUME, CHAR, STYLE.
+- Pressing it with Move's Record on records the change to the random values as
+  automation.
+
+**How the STYLEs differ** (all are built on "a fat low end + complex harmonics";
+they are not separate genres)
+
+| STYLE | Tendency |
 |---|---|
-| **CHAOTIC**（初期値） | 3 つの要素を全部持つ標準スタイル。MOTION が一番大きく、よく動く |
-| **DARK** | 低め・暗め（CUTOFF 低め）、FM とシンクは控えめ、低音とディレイが多め |
-| **INDUST** | FM とシンクが強く、DIRTY 多め、ディレイは少なめ。VCO2 が倍音から外れた比率になることもある |
+| **CHAOTIC** (default) | The standard style with all three elements. Largest MOTION, moves the most |
+| **DARK** | Lower and darker (lower CUTOFF), restrained FM and sync, more low end and delay |
+| **INDUST** | Strong FM and sync, more DIRTY, less delay. VCO2 sometimes lands on an inharmonic ratio |
 
-RANDOM は「過激な設定を作る」のではなく、「そのまま曲で使えるドローンを作る」ように範囲と組み合わせを絞っています（下の「RANDOM の中身」参照）。
+RANDOM narrows its ranges and combinations to "make a drone you can use in a track
+as it is", not to "make extreme settings" (see "Inside RANDOM" below).
 
-**画面を開いている間、ほかの 31 個のパッドは何もしません**（光りません）。Schwung の仕組み上、モジュールはパッドを 1 つだけ借りることができず、32 個まとめて借りる必要があるためです。画面を閉じると、パッドは Move に戻ります。
+**While the screen is open, the other 31 pads do nothing** (they are not lit).
+Because of how Schwung works, a module cannot borrow just one pad; it has to borrow
+all 32 together. When the screen is closed the pads return to Move.
 
 ---
 
-## 操作方法（詳細）
+## Controls (detail)
 
-### パラメーター・ページ
+### Parameter pages
 
-Schwung 標準のノブ画面と同じ画面で操作します（`ui_chain.js` が Schwung 自身のページエンジンで描いています。違いはパッドを使うことだけです）。ジョグで 2 ページを切り替えます。
+It is operated on the same screen as Schwung's standard knob screen (`ui_chain.js`
+draws it with Schwung's own page engine; the only difference is that it uses the
+pads). The jog wheel switches between the 2 pages.
 
-| ページ | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+| Page | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
 |---|---|---|---|---|---|---|---|---|
 | **MAIN** | VOLUME | DRIFT X | DRIFT Y | FM DRIVE | SYNC SWEEP | CUTOFF | RESONANCE | MOTION |
 | **SETUP** | VCO1 FREQ | VCO2 FREQ | VCO MIX | BASS | DIRTY SUB | DELAY | CHARACTER | RANDOM STYLE |
 
-### 各パラメーター
+### Each parameter
 
-| キー | 範囲 | 内容 |
+| Key | Range | What it does |
 |---|---|---|
-| `volume` | 0〜1 | 出力音量（x^1.5 カーブ、約 15 ms でなめらかに追従、0 で完全な無音）。初期値 0.7 |
-| `drift_x` | −1〜+1 | VCO2 の周波数を VCO1 に対して動かす。**左端で −1 オクターブ、右端で +3 オクターブ**（中央付近は細かく、端ほど大きく）。倍音の構成とうなりが変わる。VCO1 の音程とサブベースは動かない |
-| `drift_y` | −1〜+1 | フィルターのオーディオレート変調。＋側は VCO2（ノコギリ波）で、裂けるような明るい揺れ。−側は VCO1 × VCO2（リング変調の積）で、鐘のような非整数倍音。最大 ±5 オクターブ。**＋側ではさらにカットオフ自体も最大 +4 オクターブ開く**（−側は変調だけ）。サブベースには効かない |
-| `fm_drive` | 0〜1 | クロス FM の深さ。1 で VCO2 → VCO1 が ±6 オクターブ（VCO1 → VCO2 はその 0.8 倍）。x^1.3 カーブで、前半から音が変わる。上げるとカットオフも最大 +1 オクターブ開く。FM で振られる VCO の瞬間の音程は、自分の音程の 1.5 オクターブ下〜5 オクターブ上の範囲に収めている（下の「FM の範囲」）。最大にすると VCO の平均の音程は 1 オクターブ弱上がる（低音は SUB が保つ） |
-| `sync_sweep` | 0〜1 | SYNC / FM+SYNC：スレーブ（VCO2）を 0〜5 オクターブ上げる＝シンクの倍音。FM：VCO2 を 0〜3 オクターブ上げる＝FM の比率。上げるとカットオフも最大 +1 オクターブ開く |
-| `vcf_cut` | 0〜1 | カットオフ 40 Hz〜16 kHz（対数）。初期値 0.55（約 1.1 kHz）。実際のカットオフには、FM DRIVE（+1 oct まで）・SYNC SWEEP（+1 oct まで）・＋側の DRIFT Y（+4 oct まで）の分が足される |
-| `vcf_reso` | 0〜1 | レゾナンス。約 0.95 より上で自己発振。上げても出力は暴れない |
-| `motion` | 0〜1 | 自律変調の強さと速さ（下の「MOTION の中身」） |
-| `vco1_freq` | 0〜1 | VCO1 の周波数。27.5 Hz〜440 Hz（4 オクターブ、0.25 ごとに 1 オクターブ）。初期値 0.25 = 55 Hz |
-| `vco2_freq` | 0〜1 | VCO2 の周波数（同じ範囲）。初期値は VCO1 の 5 度上より 6 セントだけ高い |
-| `vco_mix` | 0〜1 | 0 = VCO1 だけ、1 = VCO2 だけ（パワーが一定になるバランス） |
-| `bass` | 0〜1 | 低音の厚み（CLEAN SUB と DIRTY SUB をまとめて操作） |
-| `dirty_sub` | 0〜1 | DIRTY SUB の揺れと歪みの強さ |
-| `delay` | 0〜1 | ディレイ 1 本。0 = なし、1 = 0.9 秒・フィードバック 0.75・暗い繰り返し |
-| `character` | FM / SYNC / FM+SYNC | 初期値 FM+SYNC（下の「CHARACTER」） |
-| `random_style` | Chaotic / Dark / Indust | RANDOM パッドのスタイル。音そのものは変わらない |
+| `volume` | 0–1 | Output level (x^1.5 curve, follows smoothly over about 15 ms, complete silence at 0). Default 0.7 |
+| `drift_x` | −1 to +1 | Moves VCO2's frequency relative to VCO1. **−1 octave fully left, +3 octaves fully right** (fine near the centre, larger towards the ends). Changes the harmonic make-up and the beating. VCO1's pitch and the sub bass do not move |
+| `drift_y` | −1 to +1 | Audio-rate modulation of the filter. The + side uses VCO2 (sawtooth), a tearing, bright wobble. The − side uses VCO1 × VCO2 (the product of ring modulation), bell-like inharmonics. Up to ±5 octaves. **On the + side the cutoff itself also opens by up to +4 octaves** (the − side is modulation only). No effect on the sub bass |
+| `fm_drive` | 0–1 | Depth of the cross FM. At 1, VCO2 → VCO1 is ±6 octaves (VCO1 → VCO2 is 0.8 times that). With an x^1.3 curve, the sound changes from early on. Turning it up also opens the cutoff by up to +1 octave. The instantaneous pitch of a VCO swung by FM is kept between 1.5 octaves below and 5 octaves above its own pitch (see "FM range" below). At maximum the VCOs' average pitch rises a little under an octave (the SUB keeps the low end) |
+| `sync_sweep` | 0–1 | SYNC / FM+SYNC: raises the slave (VCO2) by 0–5 octaves = the sync harmonics. FM: raises VCO2 by 0–3 octaves = the FM ratio. Turning it up also opens the cutoff by up to +1 octave |
+| `vcf_cut` | 0–1 | Cutoff 40 Hz to 16 kHz (logarithmic). Default 0.55 (about 1.1 kHz). The actual cutoff adds FM DRIVE (up to +1 oct), SYNC SWEEP (up to +1 oct) and the + side of DRIFT Y (up to +4 oct) |
+| `vcf_reso` | 0–1 | Resonance. Self-oscillates above about 0.95. The output does not run wild when it goes up |
+| `motion` | 0–1 | Strength and speed of the autonomous modulation (see "Inside MOTION" below) |
+| `vco1_freq` | 0–1 | VCO1's frequency. 27.5 Hz to 440 Hz (4 octaves, one octave per 0.25). Default 0.25 = 55 Hz |
+| `vco2_freq` | 0–1 | VCO2's frequency (same range). The default is 6 cents above a fifth over VCO1 |
+| `vco_mix` | 0–1 | 0 = VCO1 only, 1 = VCO2 only (a constant-power balance) |
+| `bass` | 0–1 | Thickness of the low end (controls CLEAN SUB and DIRTY SUB together) |
+| `dirty_sub` | 0–1 | Strength of DIRTY SUB's wobble and distortion |
+| `delay` | 0–1 | One delay. 0 = none, 1 = 0.9 s, feedback 0.75, dark repeats |
+| `character` | FM / SYNC / FM+SYNC | Default FM+SYNC (see "CHARACTER" below) |
+| `random_style` | Chaotic / Dark / Indust | Style of the RANDOM pad. Does not change the sound itself |
 
-選択肢のあるパラメーターは、番号でも選択肢名でも書き込めます。
+Parameters with options can be written either by number or by option name.
 
-### CHARACTER（FM / SYNC / FM+SYNC）
+### CHARACTER (FM / SYNC / FM+SYNC)
 
-| モード | VCO2 → VCO1 の FM | VCO1 → VCO2 の FM | ハードシンク |
+| Mode | FM VCO2 → VCO1 | FM VCO1 → VCO2 | Hard sync |
 |---|---|---|---|
-| **FM** | FM DRIVE | FM DRIVE × 0.8 | なし |
-| **SYNC** | なし（VCO1 はきれいなまま） | FM DRIVE | VCO1 → VCO2 |
-| **FM+SYNC**（初期値） | FM DRIVE | FM DRIVE × 0.8 | VCO1 → VCO2 |
+| **FM** | FM DRIVE | FM DRIVE × 0.8 | none |
+| **SYNC** | none (VCO1 stays clean) | FM DRIVE | VCO1 → VCO2 |
+| **FM+SYNC** (default) | FM DRIVE | FM DRIVE × 0.8 | VCO1 → VCO2 |
 
-- シンクはどのモードでも **VCO1 がマスター、VCO2 がスレーブの一方向だけ**です。2 つの VCO がお互いをリセットし合うと、周期の追いかけっこで手に負えないブザー音になるため、双方向のシンクはしません。逆方向の影響は FM だけが受け持ちます。
-- FM+SYNC では、FM で揺れたマスターの周期で VCO2 がリセットされるので、FM の濁りとシンクの鋭い倍音が両方残ります。
-- どのモードでも、8 つのノブはすべて何かに効きます（SYNC モードの FM DRIVE は「シンクされたスレーブへの FM」になります）。
-- モードを切り替えると、数 ms だけ音量を下げてその間に入れ替えるので、クリックしません。
+- In every mode, sync goes **one way only, with VCO1 as master and VCO2 as slave**.
+  If the two VCOs reset each other, their cycles chase each other into an
+  unmanageable buzz, so there is no two-way sync. Influence in the other direction
+  is carried by FM alone.
+- In FM+SYNC, VCO2 is reset on the cycle of a master shaken by FM, so both the
+  murk of FM and the sharp harmonics of sync remain.
+- In every mode all 8 knobs do something (in SYNC mode FM DRIVE becomes "FM on the
+  synced slave").
+- Switching modes lowers the level for a few ms and swaps during that time, so it
+  does not click.
 
-### BASS ENGINE（低音）
+### BASS ENGINE (the low end)
 
-2 系統の低音を、フィルターの**後ろ**で足しています。カットオフを閉じても、レゾナンスを上げても（ラダー・フィルターはレゾナンスを上げるほど低音が減ります）、低音は痩せません。
+Two kinds of low end are added **after** the filter. Closing the cutoff or raising
+the resonance (a ladder filter loses low end as resonance goes up) never thins the
+low end.
 
-- **CLEAN SUB**：サイン波。音程は **VCO1 FREQ の音程を、オクターブ単位で 40〜80 Hz の範囲に移したもの**です（初期値なら 55 Hz）。FM・シンク・DRIFT X/Y・MOTION の影響を一切受けないので、上の倍音がどれだけ暴れても常に同じ低音が鳴ります。V1 FRQ を回してオクターブの境目をまたぐと、40 ms ほどかけてなめらかに 1 オクターブ移ります。
-- **DIRTY SUB**：CLEAN SUB と**同じ位相**のサイン波を、VCO1 の三角波で位相変調し（一方向。DIRTY SUB から VCO へは戻りません）、ゆっくり変調の深さを揺らし、飽和させ、専用のローパス（350〜1250 Hz）を通したものです。同じ位相から作っているので、2 つの低音は打ち消し合わずに足し合わされます。変調の深さは、基音が痩せない範囲（最大約 1.25 ラジアン）に制限しています。
-- **BASS**：上げると、まず CLEAN SUB が入り、後半で DIRTY SUB が加わって CLEAN SUB の一部と入れ替わります。「同じ音が大きくなる」のではなく「低音が太く濃くなる」ように動きます。
-- 出力段に 25 Hz のハイパス（2 次）があり、不要な超低域と直流を取り除きます。一般的なキックと並べても埋もれすぎないよう、サブの量は控えめに、出力には余裕を残しています。
+- **CLEAN SUB**: a sine wave. Its pitch is **VCO1 FREQ's pitch moved by whole
+  octaves into the 40–80 Hz range** (55 Hz by default). It is completely
+  unaffected by FM, sync, DRIFT X/Y and MOTION, so however wild the harmonics above
+  get, the same low end always sounds. Turning V1 FRQ across an octave boundary
+  moves it smoothly by an octave over about 40 ms.
+- **DIRTY SUB**: a sine wave with **the same phase** as CLEAN SUB, phase-modulated
+  by VCO1's triangle (one way; nothing goes back from DIRTY SUB to the VCOs), its
+  modulation depth wobbling slowly, saturated, and passed through its own low-pass
+  (350–1250 Hz). Being made from the same phase, the two low ends add rather than
+  cancel. The modulation depth is limited to a range where the fundamental does not
+  thin out (at most about 1.25 radians).
+- **BASS**: turning it up brings in CLEAN SUB first, then in the second half DIRTY
+  SUB joins and replaces part of CLEAN SUB. It moves so that "the low end gets
+  fatter and denser", not so that "the same sound gets louder".
+- The output stage has a 25 Hz high-pass (2nd order), removing unneeded infrasound
+  and DC. So it does not bury a typical kick too much, the amount of sub is kept
+  modest and the output leaves headroom.
 
-### MOTION の中身
+### Inside MOTION
 
-- 5 本の変調：FM の深さ、シンクの量、フィルター変調（DRIFT Y に加算）、カットオフ（±1.2 オクターブ）、VCO2 の比率（±0.12 オクターブ）。
-- それぞれが「互いに割り切れない速さのサイン波」と「1.5〜4.5 秒ごとに新しい目標へなめらかに移るランダムな動き」の合計なので、**同じ動きを繰り返しません**。MOTION が 0.6 を超えると、もっと速く小さなランダムの動きが加わります。
-- MOTION の値で深さ（0 で完全に止まる）と速さ（0.35〜3.35 倍）が同時に変わります。
-- 低音（CLEAN SUB / DIRTY SUB の音程）、VCO1 の音程、全体の音量には一切かかりません。リズムを感じさせる周期的な動きや、テンポ同期もありません。
+- 5 modulations: FM depth, amount of sync, filter modulation (added to DRIFT Y),
+  cutoff (±1.2 octaves), VCO2's ratio (±0.12 octave).
+- Each is the sum of "sine waves at speeds that do not divide into each other" and
+  "a random movement that glides smoothly to a new target every 1.5–4.5 s", so **it
+  never repeats the same movement**. Above MOTION 0.6, faster, smaller random
+  movement is added.
+- MOTION's value changes the depth (completely still at 0) and the speed (0.35 to
+  3.35 times) together.
+- It never touches the low end (CLEAN SUB / DIRTY SUB pitch), VCO1's pitch or the
+  overall level. There is no periodic movement that suggests a rhythm, and no tempo sync.
 
-### ディレイ
+### Delay
 
-DELAY ノブ 1 本で、時間（60 ms〜0.9 秒）・フィードバック（0.12〜0.75）・ウェット量が一緒に動きます。0 でディレイなし。上げるほど長く、繰り返しが多く、暗くなります（長いほど高域が削れる設定は、ご要望の「大きい値では暗い空間的な広がり」に合わせたものです）。フィードバックは 0.75 で止まり、ループの中は柔らかく飽和するので、発振して暴走することはありません。DELAY を回すと時間がなめらかに追従するため、繰り返しの音程が少し揺れます。
+The single DELAY knob moves time (60 ms to 0.9 s), feedback (0.12–0.75) and wet
+amount together. No delay at 0. The higher it goes, the longer, the more repeats and
+the darker (the setting that loses more highs the longer it gets follows the
+specification's request for "a dark spatial spread at large values"). Feedback stops
+at 0.75 and the loop saturates softly, so it never oscillates and runs away. Turning
+DELAY makes the time follow smoothly, so the pitch of the repeats wavers a little.
 
-### 再生・停止
+### Playing and stopping
 
-- Move のトランスポート（ホストの拍位置 `get_beat_position`、停止中は負の値）を見ています。それがないホストでは MIDI クロック（Start / Continue / Clock で再生、Stop か 0.5 秒クロックが来なければ停止）で判断します。**どちらも分からないときは鳴りません。**
-- 再生開始で約 20 ms のフェードイン、停止で約 30 ms のフェードアウト（ディレイの残響を含む）。
-- 停止してフェードアウトが終わると、DSP は何も計算しません。次に再生したときは、位相・フィルター・ディレイが空の状態から始まります（前回の残響が鳴ることはありません）。
-- MIDI のノート・ベロシティ・ピッチベンドは無視します。音程も音色も変わりません。
+- It watches Move's transport (the host's beat position `get_beat_position`,
+  negative while stopped). On a host without it, it judges from MIDI clock
+  (Start / Continue / Clock to play; Stop, or 0.5 s with no clock, to stop). **When
+  neither is known, it does not sound.**
+- About a 20 ms fade-in when playback starts and about a 30 ms fade-out on stop
+  (including the delay's tail).
+- Once stopped and the fade-out has finished, the DSP computes nothing. The next
+  time it plays, phases, filter and delay start empty (the previous tail does not
+  sound).
+- MIDI notes, velocity and pitch bend are ignored. Neither pitch nor timbre changes.
 
-### オートメーション（Move の録音で動きを記録する）
+### Automation (recording movements with Move's record)
 
-Schwung 本体のオートメーション機能で、ノブの動きを Move のクリップに記録・再生できます（Schwung 1.6 以降）。モジュール側の特別な設定はいりません。
+With Schwung's own automation feature, knob movements can be recorded into and
+played back from Move's clips (Schwung 1.6 or later). No special setting is needed
+on the module side.
 
-**記録する**
-1. Move で Drifter のトラックを選び、クリップを再生します。
-2. Move の **Record** を押して録音状態にします。
-3. Schwung の Drifter の画面でノブを回します。回した動きがそのクリップに記録されます。
-4. Record を止めます。以後、クリップがループするたびに記録した動きが再生されます。
+**Recording**
+1. Select Drifter's track on Move and play the clip.
+2. Press Move's **Record** to arm recording.
+3. Turn knobs on Schwung's Drifter screen. The movements are recorded into that clip.
+4. Stop Record. From then on, the recorded movements play back every time the clip loops.
 
-**消す**
+**Clearing**
 
-| 範囲 | 操作 |
+| Scope | How |
 |---|---|
-| 1 つのノブだけ（今のクリップ） | ノブ画面で **Delete を押したまま、そのノブに触る（少し回す）** |
-| 1 ステップだけ | ステップを押さえたまま Delete を押し、ノブに触る（ノブに触らずに離すとそのステップの全パラメーター） |
-| トラック全部 | そのスロットの **Slot Settings → Clear Lanes** |
+| One knob only (the current clip) | On the knob screen, **hold Delete and touch that knob (turn it a little)** |
+| One step only | Hold the step, press Delete, and touch a knob (releasing without touching a knob clears every parameter on that step) |
+| The whole track | **Slot Settings → Clear Lanes** of that slot |
 
-**うまく効かないとき**
-- **再生中なのにオートメーションが聞こえない／ノブを回した値に貼り付く**：Schwung の**シーン**（Scenes 画面）で、そのパラメーターがスナップショットにロックされていないか確認してください。シーンにロックされたパラメーターは、オートメーションより後のシーン側の値が鳴ります。
-- **ノブを回しても音が変わらない**：モジュールを更新したあと Move を再起動していない可能性があります。再起動してください。
-- 画面上のノブの針は**ノブ本来の値**を指したままで、オートメーションの値は別の小さな印で表示されます。針が動かないのは正常です。
+**When it does not work**
+- **The automation is not heard while playing / sticks at the value you turned**:
+  check on Schwung's **Scenes** screen whether that parameter is locked in a
+  snapshot. A parameter locked in a scene sounds at the scene's value, which comes
+  after the automation.
+- **Turning knobs does not change the sound**: Move may not have been restarted after
+  updating the module. Restart it.
+- The knob's pointer on screen keeps pointing at **the knob's own value**, and the
+  automation's value is shown by a separate small mark. The pointer not moving is normal.
 
 ---
 
-## 信号の流れ
+## Signal flow
 
 ```
-          MOTION（5 本のゆっくりした変調）
-             │ FM / SYNC / VCF 変調 / CUTOFF / VCO2 比率
+          MOTION (5 slow modulations)
+             │ FM / SYNC / VCF modulation / CUTOFF / VCO2 ratio
              ↓
-   VCO1（矩形波）⇄ クロス FM ⇄ VCO2（ノコギリ波）
-        └──── ハードシンク（1 → 2）────┘
+   VCO1 (square) ⇄ cross FM ⇄ VCO2 (sawtooth)
+        └──── hard sync (1 → 2) ────┘
                      │
                     MIX
                      ↓
-       ラダー VCF ← DRIFT Y（VCO によるオーディオレート変調）
+       ladder VCF ← DRIFT Y (audio-rate modulation by the VCOs)
                      │
-                     ＋ CLEAN SUB（サイン、FM なし）
-                     ＋ DIRTY SUB（同じ位相、VCO1 で位相変調 → 飽和 → LPF）
+                     + CLEAN SUB (sine, no FM)
+                     + DIRTY SUB (same phase, phase-modulated by VCO1 → saturation → LPF)
                      ↓
-                   DELAY（1 ノブ）
+                   DELAY (1 knob)
                      ↓
-          再生 / 停止のフェード → 25 Hz HPF → リミッター → VOLUME → 出力（モノラル）
+          play / stop fades → 25 Hz HPF → limiter → VOLUME → output (mono)
 ```
 
-VCO・ミキサー・VCF・2 つのサブはホストの 2 倍（88.2 kHz）で計算し、31 タップのハーフバンド・フィルターで 1 回だけ間引きます。ディレイと出力段は 44.1 kHz です。
+The VCOs, mixer, VCF and both subs are computed at twice the host rate (88.2 kHz)
+and decimated once with a 31-tap half-band filter. The delay and output stage run at
+44.1 kHz.
 
-**FM と SYNC の処理順**（1 サンプルごと、2 倍オーバーサンプリング）：
-1. VCO1 を、VCO2 の**1 サンプル前**の三角波で FM して進める（周期の終わりを越えたら、越えた時刻を記録）。
-2. VCO2 を、VCO1 の**今**の三角波で FM して進める。VCO1 がこのサンプル内で周期を終えていたら（シンクが有効なとき）、その正確な時刻で VCO2 の位相を 0 に戻す。
-3. FM の変調信号は、各 VCO の位相から作った**三角波**です（矩形波で FM すると 2 つの音程を行き来するだけになるため。三角波なら FM DRIVE の前半が穏やかになります）。
+**Order of FM and SYNC processing** (per sample, 2× oversampled):
+1. Advance VCO1, FM'd by VCO2's triangle from **one sample earlier** (if it passes
+   the end of its cycle, record the moment it did).
+2. Advance VCO2, FM'd by VCO1's **current** triangle. If VCO1 finished its cycle
+   within this sample (and sync is on), reset VCO2's phase to 0 at that exact moment.
+3. The FM modulating signal is a **triangle** made from each VCO's phase (FM by a
+   square only flips between two pitches; with a triangle the first half of FM
+   DRIVE is gentler).
 
-**エイリアス対策**：VCO1 の矩形波の段差と、VCO2 のノコギリ波の段差（自然な折り返しとシンクのリセットの両方）に PolyBLEP をかけています。シンクの段差の大きさはリセットが起きてからしか分からないので、VCO2 は 1 サンプル（11 µs）遅らせて出力し、段差の手前側の補正を、まだ出していないサンプルに足しています。FM で VCO の瞬間の周波数が上がりすぎないよう、17.6 kHz で頭打ちにしています。
+**Anti-aliasing**: PolyBLEP is applied to the steps of VCO1's square and of VCO2's
+sawtooth (both the natural wrap and the sync reset). The size of a sync step is known
+only after the reset happens, so VCO2 is output one sample (11 µs) late and the
+correction for the near side of the step is added to the sample not yet output. So
+that FM does not push a VCO's instantaneous frequency too high, it is capped at
+17.6 kHz.
 
-**FM の範囲**：FM で振られる VCO の瞬間の音程は、FM DRIVE がどれだけ深くても、その VCO 自身の音程の **1.5 オクターブ下〜5 オクターブ上**に収めています。制限しないと、深いクロス FM＋シンクは 2 つの行き止まりに落ちます。ひとつはマスターが数 Hz まで遅くなる状態（可聴域より下になり、ドローンがプチプチしたクリックになる）、もうひとつはマスターが上限に張り付き、スレーブが毎サンプルリセットされる状態（直流になる）です。どちらも 15 dB ほど音が小さくなるのを測定で確認しています。また、シンクされたスレーブ（VCO2）の三角波は、リセットのたびに −1 から始まるので負に偏ります。それを FM に使うとマスターを引きずり下ろすため、FM に使う前に偏り（直流分）を取り除いています。
+**FM range**: however deep FM DRIVE goes, the instantaneous pitch of a VCO swung by
+FM is kept between **1.5 octaves below and 5 octaves above** that VCO's own pitch.
+Without the limit, deep cross FM + sync falls into one of two dead ends: the master
+slowing to a few Hz (below the audible range, turning the drone into crackling clicks),
+or the master pinned at the ceiling with the slave reset every sample (turning into
+DC). Both were measured to make the sound about 15 dB quieter. Also, the synced slave's
+(VCO2's) triangle starts from −1 at every reset, so it is biased negative. Used for FM
+it would drag the master down, so the bias (DC) is removed before it is used for FM.
 
-**出力の安全装置**：25 Hz ハイパス、瞬時に効いて 250 ms で戻るリミッター（しきい値 0.95）、0.8 から先をなめらかに 0.98 に収めるソフトクリップ。通常のパッチではリミッターはほとんど働きません（初期パッチの VOLUME 0.7 でピーク約 −8 dBFS、RMS 約 −17 dBFS）。万一 NaN / Inf が出た場合は 1 ブロックで無音に戻して復帰します。
+**Output safety**: a 25 Hz high-pass, a limiter acting instantly and recovering over
+250 ms (threshold 0.95), and a soft clip bringing anything above 0.8 smoothly into
+0.98. In normal patches the limiter hardly acts (the default patch at VOLUME 0.7 peaks
+around −8 dBFS with an RMS around −17 dBFS). Should NaN / Inf ever appear, it returns
+to silence within one block and recovers.
 
-## RANDOM の中身
+## Inside RANDOM
 
-単純に全ノブを一様乱数にするのではなく、次の制約で作ります（`ui_core.mjs` の `STYLE_RANGES` と `randomPatch()`）。
+Rather than simply setting every knob to a uniform random value, it builds patches
+under these constraints (`STYLE_RANGES` and `randomPatch()` in `ui_core.mjs`).
 
-- スタイルごとに、各ノブの範囲を決めている（DARK は CUTOFF 低め・ディレイ多め、INDUST は FM・シンク・DIRTY 多め、など）。
-- **VCO1 FREQ は 31〜91 Hz**（低音のドローン）に限る。**VCO2 は VCO1 からの音程**（ユニゾン、4 度、5 度、1 オクターブ、1 オクターブ＋5 度、2 オクターブ、それぞれ数セントずらす）で決める。INDUST は 4 割の確率で倍音から外れた比率にする。
-- **BASS は 0.4 以上**（必ず低音がある）。
-- FM DRIVE と SYNC SWEEP の合計は 1.3 まで（両方最大で音が崩壊しないように）。MOTION が 0.7 を超えるときは FM DRIVE を 15 % 下げる（MOTION 自身が FM を ±0.3 動かすため）。
-- RESO は「0.85 − 0.3 × FM DRIVE」まで（FM が強いほど共振を控える）。CUTOFF が 0.4 未満なら RESO は 0.55 まで（低いところの自己発振はサブとぶつかるため）。
-- CUTOFF は VCO1 の音域より下には閉じない。
-- VOLUME・CHARACTER・STYLE は変えない。DRIFT X / Y は 0 に戻す。
+- Each style sets the range of each knob (DARK has lower CUTOFF and more delay, INDUST
+  more FM, sync and DIRTY, and so on).
+- **VCO1 FREQ is limited to 31–91 Hz** (a low drone). **VCO2 is set as an interval
+  from VCO1** (unison, fourth, fifth, octave, octave + fifth, two octaves, each detuned
+  by a few cents). INDUST uses an inharmonic ratio 40 % of the time.
+- **BASS is 0.4 or more** (there is always a low end).
+- The sum of FM DRIVE and SYNC SWEEP is at most 1.3 (so the sound does not collapse with
+  both at maximum). When MOTION is above 0.7, FM DRIVE is lowered by 15 % (because
+  MOTION itself moves FM by ±0.3).
+- RESO is at most "0.85 − 0.3 × FM DRIVE" (the stronger the FM, the less resonance).
+  With CUTOFF below 0.4, RESO is at most 0.55 (self-oscillation down low clashes with
+  the sub).
+- CUTOFF never closes below VCO1's range.
+- VOLUME, CHARACTER and STYLE are not changed. DRIFT X / Y return to 0.
 
-**検証**（`tests/test_random.c`）：`tests/test_ui.mjs` が各スタイル 400 個のパッチを書き出し、そのうち各 150 個（計 450 個）を実際に 3 秒ずつ（MOTION も動かしたまま）レンダリングして、次を確認しています。
+**Verification** (`tests/test_random.c`): `tests/test_ui.mjs` writes out 400 patches
+per style, and 150 of them per style (450 in all) are actually rendered for 3 s each
+(with MOTION moving), checking the following.
 
-| 項目 | 合格の条件 | 実測（x86、v0.8.0〜v0.8.1。パッチは実行ごとに変わるので 3 回分） |
+| Item | Pass condition | Measured (x86, v0.8.0–v0.8.1; patches change every run, so 3 runs) |
 |---|---|---|
-| NaN / Inf | なし | なし |
-| ピーク | 0.98 未満 | 最大 0.54 |
-| RMS | −28〜−9 dBFS | −20.7〜−9.4 dBFS |
-| スタイル内の音量差（10〜90 %） | 10 dB 以内 | 約 3.5〜4.2 dB |
-| 低域（150 Hz 未満）のエネルギー | 全体の 25 % 以上 | 最小 33〜41 % |
-| 高域（4 kHz 超）のエネルギー | 全体の 12 % 以下 | 最大 4.4〜9.1 % |
-| 直流 | 0.005 未満 | 最大 0.0015 |
-| 途切れ（100 ms ごとの RMS） | −40 dBFS 未満にならない | 最も静かな 100 ms で −23〜−27 dBFS |
+| NaN / Inf | none | none |
+| Peak | below 0.98 | at most 0.54 |
+| RMS | −28 to −9 dBFS | −20.7 to −9.4 dBFS |
+| Level spread within a style (10–90 %) | within 10 dB | about 3.5–4.2 dB |
+| Low-band (below 150 Hz) energy | at least 25 % of the total | minimum 33–41 % |
+| High-band (above 4 kHz) energy | at most 12 % of the total | maximum 4.4–9.1 % |
+| DC | below 0.005 | at most 0.0015 |
+| Dropouts (RMS every 100 ms) | never below −40 dBFS | quietest 100 ms at −23 to −27 dBFS |
 
-## ビルド
+## Building
 
-必要なもの：`gcc`、`python3`、Move 用には `aarch64-linux-gnu-gcc`、UI テストには Node.js。
-Schwung のプラグイン API ヘッダー（`third_party/schwung/host/plugin_api_v1.h`、Schwung 1.7.3 からそのまま）を同梱しているので、このリポジトリだけでビルドできます。
+Requirements: `gcc`, `python3`, `aarch64-linux-gnu-gcc` for Move, and Node.js for the
+UI tests. Schwung's plugin API header (`third_party/schwung/host/plugin_api_v1.h`,
+unchanged from Schwung 1.7.3) is bundled, so this repository builds on its own.
 
 ```bash
-scripts/build.sh arm64      # dist/drifter/dsp.so と dist/drifter-module.tar.gz
-scripts/build.sh native     # テスト用のデスクトップ版 dsp.so
-scripts/test.sh             # 全テスト + ARM64 ビルド（--quick で 60 秒のストレステストを省略）
+scripts/build.sh arm64      # dist/drifter/dsp.so and dist/drifter-module.tar.gz
+scripts/build.sh native     # desktop dsp.so for the tests
+scripts/test.sh             # all tests + ARM64 build (--quick skips the 60 s stress test)
 ```
 
-`scripts/check_abi.py` は、ARM 版の `.so` が AArch64 でない・Move の glibc 2.34 より新しい関数を使っている・`move_plugin_init_v2` 以外を公開している、のどれかに当たるとビルドを失敗させます。
+`scripts/check_abi.py` fails the build if the ARM `.so` is not AArch64, uses
+functions newer than Move's glibc 2.34, or exports anything other than
+`move_plugin_init_v2`.
 
-テスト（`scripts/test.sh`）：
-- `tests/test_engine.c`（ASan + UBSan 付き、202 チェック）：初期値（FM+SYNC が初期モード）と範囲、各ノブの対応表（VCO・サブが常に 40〜80 Hz で VCO1 から整数オクターブ・カットオフ・ディレイ）、停止中は完全な無音で何も計算しないこと、再生でフェードイン・停止で 40 ms 以内に無音（ディレイ込み）、VCO の音程、DRIFT X が VCO2 を −1〜+3 オクターブ動かしサブを動かさないこと、FM DRIVE で VCO1 の瞬間の音程の振れ幅が段階ごとに増え、音色が前半から変わり、音量差が 6 dB 以内で、音程の中心が 1 オクターブ以内に収まり、瞬間の音程が −1.5〜+5 オクターブの範囲に収まること、SYNC で波形がマスターの周期で繰り返し SWEEP で倍音が増えること、FM+SYNC で FM DRIVE と SWEEP がお互いに独立して効くこと、シンクの段差が帯域制限されていること、CHARACTER の切り替えでクリックしないこと、DRIFT Y が正負どちらでも効き正負で音が違うこと、**CLEAN SUB だけを取り出して**（BASS あり・なしの差を取る）FM 1 ＋ MOTION 1 でも振幅が 5 % 以内で純粋なサイン波のままなこと、DIRTY SUB が基音を保ったまま倍音を足し、高域を出さないこと、BASS で低音が段階ごとに増えること、MOTION 0 で FM とカットオフが完全に止まること・MOTION 1 で大きく動き、なめらかで、範囲内で、サブを動かさないこと、**全ノブを 1 本ずつ最小から最大まで回して** 50 ms ごとの音量の急増が 9 dB 未満でピークが 0.99 以下なこと、22.05 / 44.1 / 48 / 96 kHz での極端な組み合わせ 32 通り、**全ノブを最大にした 60 秒のレンダリング**、2 万ブロックのランダム操作（再生・停止も切り替え）。
-- `tests/smoke.py`：本物の `dsp.so` を Schwung と同じ v2 API で `dlopen` し、メタデータが `module.json` と一致すること、2 ページの並び、全パラメーターの読み書き（数値と選択肢名）、旧バージョンのキーを書いても落ちないこと、状態の保存と復元・旧形式（v0.5.0〜v0.7.0）の読み込み・壊れたデータの拒否、停止中は無音・MIDI ノートでは鳴らない・再生でフェードイン・停止でフェードアウト、**MIDI ノートとピッチベンドを送っても出力がサンプル単位で全く同じ**こと、VOLUME 0 で完全な無音、全ノブ最大・最小、MIDI クロックによる再生判定とクロックが途切れたときの停止、インスタンス数の上限、48 kHz のホストを確認します。
-- `tests/test_ui.mjs`（Node.js）：`ui_core.mjs` を Schwung 本物のページエンジン（`DRIFTER_SHARED` に Move の `/data/UserData/schwung/shared` のコピーを指定すると実機と同じ版）で動かし、2 ページの並び、画面表示中にパッドを借りて右上だけ光らせること、ノブ操作、ほかのパッドが何もしないこと、RANDOM が対象のノブをすべて書き換え除外ノブに触れず DRIFT X/Y を 0 に戻すこと、選んだ STYLE が使われること、9000 個のパッチの範囲と組み合わせの制約、スタイルごとの傾向、画面を閉じるとパッドと LED を Move に返すことを確認します。
-- `tests/test_random.c`：上の「RANDOM の中身」の検証。
-- `--bench`：全ノブ最大の 60 秒の計算時間。
+Tests (`scripts/test.sh`):
+- `tests/test_engine.c` (with ASan + UBSan, 202 checks): defaults (FM+SYNC is the
+  default mode) and ranges; the mapping of each knob (VCOs; the sub always within
+  40–80 Hz and a whole number of octaves from VCO1; cutoff; delay); complete silence
+  and no computation while stopped; fade-in on play and silence within 40 ms of stop
+  (including the delay); VCO pitch; DRIFT X moving VCO2 by −1 to +3 octaves without
+  moving the sub; FM DRIVE increasing the swing of VCO1's instantaneous pitch step by
+  step, changing the timbre from early on, keeping level differences within 6 dB, the
+  pitch centre within an octave and the instantaneous pitch within −1.5 to +5 octaves;
+  SYNC repeating the waveform on the master's cycle and SWEEP adding harmonics; FM
+  DRIVE and SWEEP acting independently of each other in FM+SYNC; sync steps being
+  band-limited; no click on CHARACTER switches; DRIFT Y acting on both signs and
+  sounding different for each; **CLEAN SUB alone** (the difference with and without
+  BASS) staying a pure sine within 5 % amplitude even at FM 1 + MOTION 1; DIRTY SUB
+  adding harmonics while keeping the fundamental, without highs; BASS increasing the
+  low end step by step; MOTION 0 stopping FM and cutoff completely, MOTION 1 moving
+  them a lot, smoothly and within range, without moving the sub; **turning every knob
+  one at a time from minimum to maximum** with level jumps per 50 ms under 9 dB and
+  peaks at or below 0.99; 32 extreme combinations at 22.05 / 44.1 / 48 / 96 kHz; **a
+  60 s render with every knob at maximum**; 20,000 blocks of random operation
+  (including play/stop switching).
+- `tests/smoke.py`: `dlopen`s the real `dsp.so` through the same v2 API as Schwung and
+  checks that the metadata matches `module.json`; the order of the 2 pages; reading and
+  writing every parameter (numbers and option names); that writing old versions' keys
+  does not crash; saving and restoring state, loading old formats (v0.5.0–v0.7.0) and
+  rejecting broken data; silence while stopped, no sound from MIDI notes, fade-in on
+  play and fade-out on stop; **that the output is exactly the same, sample for sample,
+  when MIDI notes and pitch bend are sent**; complete silence at VOLUME 0; every knob at
+  maximum and minimum; play detection from MIDI clock and stopping when the clock
+  breaks off; the instance limit; a 48 kHz host.
+- `tests/test_ui.mjs` (Node.js): runs `ui_core.mjs` with Schwung's real page engine
+  (pointing `DRIFTER_SHARED` at a copy of the Move's `/data/UserData/schwung/shared`
+  gives the same version as the device) and checks the order of the 2 pages; borrowing
+  the pads while the screen is shown and lighting only the top-right one; knob
+  operation; the other pads doing nothing; RANDOM rewriting every target knob without
+  touching the excluded ones and returning DRIFT X/Y to 0; the chosen STYLE being used;
+  the range and combination constraints over 9000 patches; per-style tendencies; and
+  returning the pads and LEDs to Move when the screen closes.
+- `tests/test_random.c`: the verification in "Inside RANDOM" above.
+- `--bench`: computation time for 60 s with every knob at maximum.
 
-**CPU**：全ノブ最大で、x86 のデスクトップで 1 コアの約 1 %、**Move 実機（Cortex-A53、1 コア）で約 4.6 %（128 サンプルのブロックあたり約 134 µs）**。停止中はほぼゼロです。
+**CPU**: with every knob at maximum, about 1 % of one core on an x86 desktop, and
+**about 4.6 % on a real Move (Cortex-A53, one core; about 134 µs per 128-sample
+block)**. Nearly zero while stopped.
 
-## インストール
+## Installing
 
 ```bash
 scripts/build.sh arm64
-python3 scripts/install.py http://<MoveのIPアドレス>:7700
+python3 scripts/install.py http://<Move's IP address>:7700
 ```
 
-`dist/drifter-module.tar.gz` を Schwung Manager のカスタムモジュール・インストールに送ります。Releases からダウンロードした tarball を入れるときは `--package <ファイル>` を付けます。Manager の Web 画面から同じ tarball を入れても構いません。`modules/sound_generators/drifter/` に入ります。
+This sends `dist/drifter-module.tar.gz` to Schwung Manager's custom module install. To
+install a tarball downloaded from Releases, add `--package <file>`. Installing the same
+tarball from the Manager's web page also works. It goes into
+`modules/sound_generators/drifter/`.
 
-**インストール・更新のあとは Move を再起動してください。**
+**Restart Move after installing or updating.**
 
-## v0.8.1 の変更
+## Changes in v0.8.1
 
-- DRIFT X：右側の幅を +1 → **+3 オクターブ**に（左側は −1 オクターブのまま）。
-- DRIFT Y：＋側でカットオフ自体も最大 +4 オクターブ開くように（−側は変わらず）。
-- FM DRIVE：最大 ±3.5 → **±6 オクターブ**。SYNC SWEEP：最大 3.5 → **5 オクターブ**（FM モードでは 2 → 3）。どちらも上げるとカットオフが最大 +1 オクターブずつ開くので、作った倍音がフィルターに削られずに聞こえる。
-- 深い FM で音が消える問題を直すため、FM で振られる範囲を各 VCO の音程の −1.5〜+5 オクターブに制限し、シンクされた VCO2 の三角波の偏りを取り除いた（「FM の範囲」参照）。v0.8.0 にあった「FM で音程の中心を保つ補正」は、深い FM で VCO を可聴域の下まで落としていたのでやめた。
-- 保存データの形式は v0.8.0 と同じ（v3）。同じノブ位置でも v0.8.0 より変化が大きく聞こえる。
+- DRIFT X: the right side widened from +1 to **+3 octaves** (the left side stays at
+  −1 octave).
+- DRIFT Y: on the + side the cutoff itself now also opens by up to +4 octaves (the −
+  side is unchanged).
+- FM DRIVE: maximum from ±3.5 to **±6 octaves**. SYNC SWEEP: maximum from 3.5 to **5
+  octaves** (2 → 3 in FM mode). Turning either up opens the cutoff by up to +1 octave
+  each, so the harmonics they create are heard rather than shaved off by the filter.
+- To fix the sound disappearing with deep FM, the FM swing is limited to −1.5 to +5
+  octaves of each VCO's pitch, and the bias of the synced VCO2's triangle is removed
+  (see "FM range"). v0.8.0's "correction that keeps the pitch centre under FM" was
+  dropped, because with deep FM it pushed the VCOs below the audible range.
+- The saved-data format is the same as v0.8.0 (v3). The same knob positions sound like
+  bigger changes than in v0.8.0.
 
-## v0.7.0 からの変更と、古いセットの扱い
+## Changes from v0.7.0, and old sets
 
-v0.8.0 で、鍵盤で弾くモノシンセから**ドローン専用の音源**に作り直しました。パラメーターは 30 個から 16 個に減り、4 ページが 2 ページになりました。
+v0.8.0 rebuilt it from a keyboard-played mono synth into **an instrument only for
+drones**. Parameters went from 30 to 16, and 4 pages became 2.
 
-- **削除したもの**：VCO ごとの波形・FM/SYNC スイッチ・MOD・音量、VCF への変調源スイッチ（VCO1 / VCO2 / LFO）と VCF MOD、LFO（RATE / WAVE / 各行き先）、DRIFT の行き先切り替え、Delay Time / Feedback（DELAY 1 本に統合）、GATE HOLD、TRIGGER、SUB（BASS と DIRTY に置き換え）、ノートによる発音と音程。
-- **同じキー名で残したもの**：`volume`、`drift_x`、`drift_y`、`vcf_cut`、`vcf_reso`、`vco1_freq`、`vco2_freq`。ただし `vco1_freq` / `vco2_freq` は範囲が変わりました（0.3 Hz〜14 kHz → 27.5〜440 Hz）。`drift_x` / `drift_y` も行き先が固定になりました。
-- **保存データ**：状態の形式を `{"v":3,"p":[16 個の値]}` に上げました。旧形式（v0.5.0 の `v:1`、v0.6.0〜v0.7.0 の `v:2`）を読み込むと、**エラーにはならず**、VOLUME・CUTOFF・RESONANCE だけを引き継ぎ、ほかはすべて v0.8.0 の初期値になります（DRIFT X / Y は中央）。旧バージョンの音は再現されません。
-- 旧バージョンのキー（`vco1_mod`、`gate_hold`、`trigger` など）が、セットやオートメーションやシーンから書き込まれても、無視されるだけで何も起きません。旧キーに記録したオートメーションは効かなくなるので、必要なら消してください（「オートメーション」の「消す」参照）。
+- **Removed**: per-VCO waveform, FM/SYNC switches, MOD and level; the VCF modulation
+  source switch (VCO1 / VCO2 / LFO) and VCF MOD; the LFO (RATE / WAVE / destinations);
+  DRIFT destination switching; Delay Time / Feedback (merged into the single DELAY);
+  GATE HOLD; TRIGGER; SUB (replaced by BASS and DIRTY); sounding and pitch from notes.
+- **Kept under the same key names**: `volume`, `drift_x`, `drift_y`, `vcf_cut`,
+  `vcf_reso`, `vco1_freq`, `vco2_freq`. But `vco1_freq` / `vco2_freq` changed range
+  (0.3 Hz–14 kHz → 27.5–440 Hz), and `drift_x` / `drift_y` now have fixed destinations.
+- **Saved data**: the state format went up to `{"v":3,"p":[16 values]}`. Loading an old
+  format (`v:1` from v0.5.0, `v:2` from v0.6.0–v0.7.0) **does not fail**: it carries
+  over only VOLUME, CUTOFF and RESONANCE, and everything else becomes v0.8.0's defaults
+  (DRIFT X / Y at the centre). The old versions' sound is not reproduced.
+- If old versions' keys (`vco1_mod`, `gate_hold`, `trigger` and so on) are written
+  from sets, automation or scenes, they are simply ignored. Automation recorded on old
+  keys stops having an effect, so clear it if needed (see "Clearing" under
+  "Automation").
 
-## Schwung との互換性
+## Compatibility with Schwung
 
-- プラグイン API **v2**（`move_plugin_init_v2`）。マルチインスタンス（6 個分の固定プール、オーディオスレッドでのメモリ確保なし）。ホストは 44.1 kHz（22.05〜96 kHz も可）。
-- すべての入り口はオーディオ（SPI）コールバック上で呼ばれるため、DSP の中ではメモリ確保・ファイル入出力・ロック・スレッド・ログを一切行いません。
-- 状態の保存：`{"v":3,"p":[16 個の値]}`。すべての値が正しく範囲内のときだけ読み込みます。
-- `ui_hierarchy` は空で返し（Schwung が `ui_chain.js` を開くようにするため）、ページ構成は `grid_hierarchy` で返します。
-- Schwung 1.7.3 で動作を確認しています。
+- Plugin API **v2** (`move_plugin_init_v2`). Multi-instance (a fixed pool of 6, no
+  memory allocation on the audio thread). The host runs at 44.1 kHz (22.05–96 kHz also
+  work).
+- Every entry point is called on the audio (SPI) callback, so the DSP does no memory
+  allocation, file I/O, locking, threading or logging at all.
+- Saved state: `{"v":3,"p":[16 values]}`. It is loaded only when every value is valid
+  and in range.
+- `ui_hierarchy` is returned empty (so Schwung opens `ui_chain.js`), and the page
+  layout is returned in `grid_hierarchy`.
+- Confirmed working on Schwung 1.7.3.
 
 ## Signal Chain
 
-`component_type: "sound_generator"`、`chainable: true`。16 個すべてのパラメーターを `chain_params` で公開しているので、チェーン・ノブ画面・LFO の行き先・オートメーションのどこからでも操作できます。
+`component_type: "sound_generator"`, `chainable: true`. All 16 parameters are
+published in `chain_params`, so they can be operated from the chain, the knob screen,
+LFO destinations and automation alike.
 
-Schwung は、無音が続いたスロットを休止させて CPU を節約します（休止中は約 0.5 秒おきにしか計算しません）。そのままだと再生ボタンを押してから最大 0.5 秒遅れて鳴り始めるので、停止中は −75 dBFS の小さな直流（聞こえない）を出してスロットを起こしたままにしています。停止中の DSP は何も計算しないので、CPU はほとんど使いません。VOLUME 0 のときは直流も出さず、完全な無音です。
+Schwung puts a slot that has been silent for a while to sleep to save CPU (while
+asleep it computes only about every 0.5 s). Left like that, sound could start up to
+0.5 s after pressing Play, so while stopped it outputs a tiny DC of −75 dBFS
+(inaudible) to keep the slot awake. The stopped DSP computes nothing, so it uses almost
+no CPU. At VOLUME 0 it does not output the DC either, and is completely silent.
 
-## 実機との違い
+## Differences from the hardware
 
-- デジタル実装なので、VCO がドリフトしません。アナログのノイズもありません。
-- CV / ゲート / オーディオ入力はありません。音程は VCO FREQ ノブだけで決まり、鍵盤では弾けません。
-- DRIFT ジョイスティックは 2 つのノブです。手を離しても中央に戻りません。
-- 波形は固定です（VCO1 = 矩形波、VCO2 = ノコギリ波、FM の変調信号は三角波）。
-- シンクは VCO1 → VCO2 の一方向だけです。
-- BASS ENGINE（CLEAN SUB / DIRTY SUB）、MOTION、RANDOM、Move の再生との連動は、このモジュールで足したものです。
-- エイリアス対策は 2 倍オーバーサンプリング＋PolyBLEP までなので、FM DRIVE と SYNC SWEEP がどちらも深いところでは、多少エイリアスが出ます（Move の CPU を優先しています）。
-- VCF は入力段に tanh を 1 つ置いた TPT ラダーです。トランジスタ・ラダーの飽和の近似で、回路そのもののモデルではありません。
+- Being digital, the VCOs do not drift. There is no analog noise either.
+- There are no CV / gate / audio inputs. Pitch is set only by the VCO FREQ knobs, and
+  it cannot be played from a keyboard.
+- The DRIFT joystick is two knobs. It does not spring back to the centre when let go.
+- The waveforms are fixed (VCO1 = square, VCO2 = sawtooth, the FM modulating signal a
+  triangle).
+- Sync is one way only, VCO1 → VCO2.
+- The BASS ENGINE (CLEAN SUB / DIRTY SUB), MOTION, RANDOM and the link with Move's
+  playback were added in this module.
+- Anti-aliasing goes only as far as 2× oversampling + PolyBLEP, so where FM DRIVE and
+  SYNC SWEEP are both deep some aliasing appears (Move's CPU takes priority).
+- The VCF is a TPT ladder with one tanh at its input stage. It approximates the
+  saturation of a transistor ladder; it is not a model of the circuit itself.
 
-## 実機で試聴して確認すること
+## To check by ear on the hardware
 
-数値のテストでは「音量・低域・高域・直流・途切れ・NaN」が範囲内なことしか分かりません。「良い音か」は、Move で次の点を耳で確認してください。
+Numeric tests only show that "level, lows, highs, DC, dropouts and NaN" are within
+range. Whether it is "a good sound" needs checking by ear on Move:
 
-1. **初期パッチ**：再生ボタンだけで、重く安定した低音のドローンになるか。開始・停止でクリックしないか。
-2. **FM DRV**：左 1/3 で穏やかな倍音、真ん中で金属的、右端でカオティックという変化が、ノブ全体でなめらかに感じられるか。どこかで急に変わりすぎていないか。
-3. **SWEEP**：FM+SYNC で、シンクのスイープが FM DRV と別のものとして聞こえるか。高い値で耳障りなエイリアス（音程と関係ない高い音）が出ていないか。
-4. **DRIFT X / Y**：中央付近で細かく動かせるか。Y の＋と−の質感の違いが使えるか。
-5. **BASS / DIRTY**：Move のスピーカーとヘッドホン（またはモニター）の両方で、低音が太くなるか。キックと一緒に鳴らして、低域が濁りすぎないか、出力に余裕があるか（BASS 1 + DIRTY 1 + VOLUME 1 でも歪まないか）。
-6. **RESO**：右端の自己発振が、耳に痛すぎないか。
-7. **MOTION**：0 で完全に止まり、真ん中でゆっくり、右端で不規則に動くか。最大でも急に無音になったり、急に大きくなったり、耳障りな高音が出たりしないか。
-8. **DELAY**：大きい値で暗く深い空間になるか。暗さの具合が好みに合うか（暗くしない方がよければ変えられます）。
-9. **CHAR**：3 つのモードの違いが分かるか。切り替えでクリックしないか。
-10. **RANDOM**：STYLE ごとに 10 回ほど押して、どれもそのまま使えるドローンになるか。音量がそろっているか。
-11. **CPU**：Schwung Manager の CPU ページで、Drifter の負荷が実用的な範囲か（ベンチマークでは全ノブ最大で 1 コアの約 4.6 %）。
+1. **Default patch**: does Play alone give a heavy, stable low drone? Does it click on
+   start and stop?
+2. **FM DRV**: does the change from gentle harmonics in the left third to metallic in
+   the middle to chaotic at the right end feel smooth across the whole knob? Does it
+   change too suddenly anywhere?
+3. **SWEEP**: in FM+SYNC, is the sync sweep heard as something separate from FM DRV?
+   At high values, is there grating aliasing (high tones unrelated to the pitch)?
+4. **DRIFT X / Y**: can they be moved finely near the centre? Is the difference in
+   texture between Y's + and − usable?
+5. **BASS / DIRTY**: does the low end get fatter on both Move's speaker and headphones
+   (or monitors)? Played with a kick, are the lows too muddy, and is there headroom in
+   the output (no distortion even at BASS 1 + DIRTY 1 + VOLUME 1)?
+6. **RESO**: is the self-oscillation at the right end too harsh?
+7. **MOTION**: completely still at 0, slow in the middle, irregular at the right end?
+   Even at maximum, does it never suddenly go silent, suddenly get loud, or produce
+   grating highs?
+8. **DELAY**: do large values give a dark, deep space? Does the amount of darkness
+   suit you (it can be changed if you would rather it were not dark)?
+9. **CHAR**: can the difference between the three modes be heard? Does switching click?
+10. **RANDOM**: press it about 10 times per STYLE — is every result a drone usable as
+    it is? Are the levels consistent?
+11. **CPU**: on Schwung Manager's CPU page, is Drifter's load in a practical range (the
+    benchmark gives about 4.6 % of one core with every knob at maximum)?
 
-## ライセンス
+## Licence
 
-MIT License、Copyright (c) 2026 Hiro Ikezawa（`LICENSE`）。同梱している Schwung のヘッダーのライセンスは `THIRD_PARTY_LICENSES.md` にあります。
-「driftbox」「REON」の名前は、このモジュールの着想元を説明するためだけに使っています。
+MIT License, Copyright (c) 2026 Hiro Ikezawa (`LICENSE`). The licence of the bundled
+Schwung header is in `THIRD_PARTY_LICENSES.md`. The names "driftbox" and "REON" are used
+only to explain what inspired this module.
