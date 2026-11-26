@@ -1,4 +1,4 @@
-/* DRIFTER - VCF: nonlinear 4-pole (24 dB/oct) ladder low pass. MIT.
+/* Drifter - VCF: nonlinear 4-pole (24 dB/oct) ladder low pass. MIT.
  *
  * Zero-delay-feedback (TPT) ladder after Zavalishin, "The Art of VA Filter
  * Design": the global feedback is solved for the current sample, so the

@@ -1,92 +1,91 @@
 {
-  "title": "DRIFTER",
+  "title": "Drifter",
   "children": [
     {
       "title": "Playing",
       "lines": [
-        "Mono 2-VCO synth after",
-        "the REON driftbox SIII.",
-        "Notes open the gate;",
-        "no envelope. Last note",
-        "has priority. FREQ is",
-        "the pitch at C4."
+        "A bass drone after the",
+        "REON driftbox SIII.",
+        "Press Play on Move:",
+        "it drones. Stop: it",
+        "fades out. Notes do",
+        "nothing at all."
       ]
     },
     {
       "title": "MAIN page",
       "lines": [
         "1 VOLUME",
-        "2 DRFT X 3 DRFT Y",
-        "4 V1 FRQ 0.3Hz-14kHz",
-        "5 V1 MOD FM from VCO2",
-        "6 V2 FRQ 7 V2 MOD",
-        "8 SUB sine 1 oct below"
+        "2 DRFT X VCO2 vs VCO1",
+        "3 DRFT Y VCF audio mod",
+        "4 FM DRV cross FM",
+        "5 SWEEP sync overtones",
+        "6 CUT 7 RESO 8 MOTION"
       ]
     },
     {
-      "title": "MIX/VCF page",
+      "title": "SETUP page",
       "lines": [
-        "1 V1 VOL 2 V2 VOL",
-        "3 CUTOFF 4 RESO",
-        "5 VCF MD mod depth",
-        "6 RATE LFO 0.02-200Hz",
-        "7 D.TIME 10ms-1s",
-        "8 F.B 0 = no delay"
+        "1 V1 FRQ 27-440 Hz",
+        "2 V2 FRQ 3 MIX V1/V2",
+        "4 BASS 5 DIRTY sub",
+        "6 DELAY one knob",
+        "7 CHAR FM/SYNC/FM+SYNC",
+        "8 STYLE for RANDOM"
       ]
     },
     {
-      "title": "SETUP 1 page",
+      "title": "DRIFT X / Y",
       "lines": [
-        "1 X TGT VCO / D.Tm",
-        "2 Y TGT VCF / F.B",
-        "3,5 WAV Saw Tri Sqr",
-        "  Puls Nois",
-        "4,6 F/S FM or Sync",
-        "7,8 LFO>V1 LFO>V2"
+        "Centre 0; right goes",
+        "much higher than left.",
+        "X: VCO2 vs VCO1,",
+        "-1 .. +3 octaves.",
+        "Y: VCOs shake the VCF;",
+        "+Y also opens it."
       ]
     },
     {
-      "title": "SETUP 2 page",
+      "title": "Bass",
       "lines": [
-        "1-3 V1/V2/LFO > VCF",
-        "4 LFO WV Tri / Sqr",
-        "5 HOLD Play=on while",
-        "  Move plays (dflt),",
-        "  Always=drone, Off",
-        "6 TRIG gate 0.2 s"
+        "BASS: clean sine sub",
+        "plus a dirty one, on",
+        "VCO1 note, 40-80 Hz.",
+        "No FM, after the VCF.",
+        "DIRTY: grit and wobble",
+        "of the dirty sub."
+      ]
+    },
+    {
+      "title": "MOTION",
+      "lines": [
+        "0: nothing moves.",
+        "Up: slow, never-",
+        "repeating drift of",
+        "FM, sync, VCF mod and",
+        "cutoff. Top: chaotic.",
+        "Bass and level stay."
       ]
     },
     {
       "title": "RANDOM pad",
       "lines": [
         "Screen open: top-right",
-        "pad = RANDOM. New",
-        "values for every knob",
-        "but VOLUME HOLD DRIFT",
-        "X/Y TGT and SUB.",
-        "Other pads: unused."
-      ]
-    },
-    {
-      "title": "Bass",
-      "lines": [
-        "SUB: sine one octave",
-        "below VCO1, no FM,",
-        "added after the VCF:",
-        "stays full at any",
-        "CUTOFF or RESO.",
-        "Lower V1 FRQ for more."
+        "pad = RANDOM. A new",
+        "drone in the STYLE on",
+        "SETUP. DRIFT X/Y go to",
+        "0. VOLUME, CHAR, STYLE",
+        "never change."
       ]
     },
     {
       "title": "Delay",
       "lines": [
-        "F.B 0 = no delay.",
-        "Raising F.B brings in",
-        "the echo and repeats.",
-        "Top: a saturating wash.",
-        "D.TIME 10ms-1s glides:",
-        "turning it bends pitch."
+        "One knob: 0 = none.",
+        "Up: longer, more",
+        "repeats, darker.",
+        "Top: 0.9 s, deep and",
+        "dark, never runs away."
       ]
     }
   ]

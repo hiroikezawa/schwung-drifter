@@ -1,4 +1,4 @@
-/* DRIFTER UI test: ui_core.mjs driving Schwung's REAL page controller and
+/* Drifter UI test: ui_core.mjs driving Schwung's REAL page controller and
  * input decoder, drawn through the device-font harness, against a fake param
  * store serving the DSP's real contract (grid_hierarchy is dumped by smoke.py
  * from the built dsp.so). Run by scripts/test.sh.
@@ -18,8 +18,8 @@ const load = (p) => import(pathToFileURL(p).href);
 const { createController } = await load(path.join(shared, "param_pages/page_controller.mjs"));
 const { decodeInput, applyInput } = await load(path.join(shared, "param_pages/page_input.mjs"));
 const { createFramebuffer, drawContext } = await load(path.join(root, "tools/param-pages/harness.mjs"));
-const { createUi, randomPatch, RANDOM_RANGES, RANDOM_KEEP, RANDOM_PAD, PAD_FIRST, PAD_LAST, LED } =
-    await load(path.join(here, "../ui_core.mjs"));
+const { createUi, randomPatch, STYLES, STYLE_RANGES, RANDOM_CENTRE, RANDOM_KEEP, RANDOM_PAD,
+        PAD_FIRST, PAD_LAST, LED } = await load(path.join(here, "../ui_core.mjs"));
 
 let failures = 0;
 function check(cond, msg) {
@@ -29,34 +29,45 @@ function check(cond, msg) {
 const manifest = JSON.parse(fs.readFileSync(path.join(here, "../module.json"), "utf8"));
 const chainParams = manifest.capabilities.chain_params;
 const meta = Object.fromEntries(chainParams.map((p) => [p.key, p]));
-const gridHierarchy = fs.readFileSync(path.join(here, "../build/native/grid_hierarchy.json"), "utf8");
+const outDir = path.join(here, "../build/native");
+const gridHierarchy = fs.readFileSync(path.join(outDir, "grid_hierarchy.json"), "utf8");
 
 /* ---- randomPatch: ranges, exclusions, cross-key rules ------------------------ */
 const keys = chainParams.map((p) => p.key);
-check(keys.every((k) => (k in RANDOM_RANGES) !== RANDOM_KEEP.includes(k)),
-      "every parameter is either randomized or kept, never both or neither");
-check(["volume", "gate_hold", "drift_x", "drift_y", "sub"].every((k) => RANDOM_KEEP.includes(k)),
-      "VOLUME, GATE HOLD, DRIFT X/Y and SUB are never randomized");
-for (let n = 0; n < 5000; n++) {
-    const p = randomPatch();
-    for (const [k, v] of Object.entries(p)) {
-        const m = meta[k], x = Number(v);
-        const r = RANDOM_RANGES[k];
-        const ok = m.type === "enum" ? Number.isInteger(x) && x >= 0 && x < m.options.length && r.includes(x)
-                                     : x >= r[0] - 1e-9 && x <= r[1] + 1e-9 && x >= m.min && x <= m.max;
-        if (!ok) { check(false, `${k}=${v} out of range`); break; }
+const randomized = new Set([...Object.keys(STYLE_RANGES.CHAOTIC), "vco2_freq", ...RANDOM_CENTRE]);
+check(keys.every((k) => randomized.has(k) !== RANDOM_KEEP.includes(k)),
+      "every parameter is either written by RANDOM or kept, never both or neither");
+check(STYLES.length === meta.random_style.options.length, "one range table per RANDOM STYLE option");
+for (const st of STYLES)
+    check(JSON.stringify(Object.keys(STYLE_RANGES[st]).sort()) === JSON.stringify(Object.keys(STYLE_RANGES.CHAOTIC).sort()),
+          `style ${st} covers the same keys`);
+/* tests/test_random.c renders these: 400 per style, one per line */
+const dump = [];
+for (let style = 0; style < STYLES.length; style++) {
+    for (let n = 0; n < 3000; n++) {
+        const p = randomPatch(Math.random, style);
+        for (const [k, v] of Object.entries(p)) {
+            const m = meta[k], x = Number(v);
+            if (!(x >= m.min && x <= m.max)) { check(false, `${STYLES[style]} ${k}=${v} out of range`); break; }
+        }
+        for (const k of RANDOM_CENTRE) if (p[k] !== "0") check(false, `${k} not centred`);
+        for (const k of RANDOM_KEEP) if (k in p) check(false, `${k} written`);
+        const iv = (Number(p.vco2_freq) - Number(p.vco1_freq)) * 4;
+        if (iv < -1.05 || iv > 2.05) check(false, `VCO2 ${iv} oct from VCO1`);
+        if (Number(p.fm_drive) + Number(p.sync_sweep) > 1.3005) check(false, "FM + SYNC both at the top");
+        if (Number(p.vcf_reso) > 0.8505) check(false, "resonance near self-oscillation");
+        if (Number(p.vcf_cut) < 0.25) check(false, "cutoff closed");
+        if (Number(p.bass) < 0.4) check(false, "no low end");
+        if (n < 400) dump.push(style + " " + Object.entries(p).map(([k, v]) => `${k}=${v}`).join(" "));
+        if (failures) break;
     }
-    if (p.vco1_wave === "4" && p.vco2_wave === "4") check(false, "two noise VCOs");
-    if (p.vco1_mode === "1" && p.vco2_mode === "1") check(false, "two synced VCOs");
-    if (Number(p.vcf_mod) > 0.15 && p.vcf_vco1 === "0" && p.vcf_vco2 === "0" && p.vcf_lfo === "0")
-        check(false, "VCF MOD with no source");
-    if (failures) break;
 }
-/* the extremes of the ranges are reachable, nothing silent is */
-const lo = randomPatch(() => 0), hi = randomPatch(() => 0.999999);
-check(Number(lo.vcf_cut) >= 0.45 && Number(hi.vcf_reso) <= 0.85 && Number(hi.delay_feedback) <= 0.7,
-      "cutoff never closed, reso below self-oscillation, feedback below the wash");
-check(Number(lo.vco1_vol) >= 0.5 && Number(lo.vco1_freq) >= 0.45, "VCO1 always audible, never sub-audio");
+fs.writeFileSync(path.join(outDir, "random_patches.txt"), dump.join("\n") + "\n");
+/* the styles really differ */
+const mean = (style, k) => { let s = 0; for (let i = 0; i < 500; i++) s += Number(randomPatch(Math.random, style)[k]); return s / 500; };
+check(mean(1, "vcf_cut") < mean(2, "vcf_cut") && mean(1, "delay") > mean(2, "delay") && mean(2, "fm_drive") > mean(1, "fm_drive"),
+      "DARK is darker and wetter, INDUSTRIAL harder");
+check(mean(0, "motion") > mean(1, "motion"), "CHAOTIC moves the most");
 
 /* ---- fake DSP ------------------------------------------------------------------ */
 const values = {};
@@ -105,13 +116,18 @@ const bare = (k) => k.slice(k.indexOf(":") + 1);
 ui.init();
 ticks(40);
 const c = ui.state.controller;
-const MAIN = ["volume", "drift_x", "drift_y", "vco1_freq", "vco1_mod", "vco2_freq", "vco2_mod", "sub"];
+const MAIN = ["volume", "drift_x", "drift_y", "fm_drive", "sync_sweep", "vcf_cut", "vcf_reso", "motion"];
+const SETUP = ["vco1_freq", "vco2_freq", "vco_mix", "bass", "dirty_sub", "delay", "character", "random_style"];
 check(JSON.stringify(c.page.keys.map(bare)) === JSON.stringify(MAIN), "page 1 = MAIN: " + c.page.keys);
-check(c.pages.length >= 4, `MAIN / MIX/VCF / SETUP 1 / SETUP 2: ${c.pages.length} pages`);
+const knobPages = c.pages.filter((pg) => pg.keys && pg.keys.length);
+check(knobPages.length >= 2 && JSON.stringify(knobPages[1].keys.map(bare)) === JSON.stringify(SETUP),
+      "page 2 = SETUP: " + (knobPages[1] && knobPages[1].keys));
+check(c.pages.filter((pg) => pg.keys && pg.keys.some((k) => keys.includes(bare(k)))).length === 2,
+      "exactly two parameter pages: " + c.pages.map((pg) => pg.title || pg.name));
 check(!reads.includes("ui_hierarchy"), "the grid reads grid_hierarchy, never the empty ui_hierarchy");
 check(fb.countLit() > 200, "page 1 draws");
 console.log(fb.toBlocks ? fb.toBlocks() : fb.toAscii());
-check(ui.title() === "DRIFTER", "title: " + ui.title());
+check(ui.title() === "Drifter", "title: " + ui.title());
 
 /* ---- the pads: blocked while shown, only 99 lit -------------------------------- */
 check(padBlocked, "pads taken while the screen is up");
@@ -125,6 +141,10 @@ let w0 = writes.length;
 ui.onMidi([0xb0, 71, 127]);                     /* knob 1 (VOLUME) down */
 ticks(10);
 check(writes.slice(w0).some(([k, v]) => k === "volume" && Number(v) < 0.7), "knob 1 = VOLUME: " + writes.slice(w0));
+w0 = writes.length;
+ui.onMidi([0xb0, 78, 1]);                       /* knob 8 (MOTION) up */
+ticks(10);
+check(writes.slice(w0).some(([k, v]) => k === "motion" && Number(v) > 0.35), "knob 8 = MOTION: " + writes.slice(w0));
 
 /* ---- another pad does nothing ------------------------------------------------- */
 w0 = writes.length;
@@ -133,25 +153,32 @@ ticks(4);
 check(writes.length === w0, "pad 70 writes nothing: " + writes.slice(w0));
 
 /* ---- RANDOM ------------------------------------------------------------------- */
-const keep = Object.fromEntries(RANDOM_KEEP.filter((k) => k !== "trigger").map((k) => [k, values[k]]));
+const keep = Object.fromEntries(RANDOM_KEEP.map((k) => [k, values[k]]));
+values.drift_x = "0.6"; values.drift_y = "-0.4";
 w0 = writes.length;
 ui.onMidi([0x90, RANDOM_PAD, 100]);
 check(leds[RANDOM_PAD] === LED.PRESSED, "RANDOM lights while held");
 const rw = writes.slice(w0);
 const written = new Set(rw.map(([k]) => k));
-check(Object.keys(RANDOM_RANGES).every((k) => written.has(k)), "RANDOM writes every randomized key: " + [...written]);
+check([...randomized].every((k) => written.has(k)), "RANDOM writes every randomized key: " + [...written]);
 check(RANDOM_KEEP.every((k) => !written.has(k)), "RANDOM writes none of the kept keys: " + [...written]);
-check(Object.entries(keep).every(([k, v]) => values[k] === v), "kept values unchanged");
-check(ui.title() === "RANDOM", "header says RANDOM: " + ui.title());
+check(Object.entries(keep).every(([k, v]) => values[k] === v), "VOLUME, CHARACTER, STYLE unchanged");
+check(values.drift_x === "0" && values.drift_y === "0", "DRIFT X/Y back to the centre");
+check(ui.title() === "RANDOM CHAOTIC", "header says RANDOM and the style: " + ui.title());
 ui.onMidi([0x90, RANDOM_PAD, 100]);             /* a repeat of a held pad is not a new press */
 check(writes.length === w0 + rw.length, "held pad fires once");
 ui.onMidi([0x80, RANDOM_PAD, 0]);
 check(leds[RANDOM_PAD] === LED.RANDOM, "RANDOM back to its colour on release");
 ticks(10);
-check(c.state.values && Number(c.state.values["synth:vcf_cut"] ?? c.state.values.vcf_cut ?? values.vcf_cut) === Number(values.vcf_cut),
-      "the grid shows the new value");
 clock += 2000; ticks(2);
-check(ui.title() === "DRIFTER", "notice clears");
+check(ui.title() === "Drifter", "notice clears");
+/* the style on SETUP is the one used */
+values.random_style = "1";
+ui.onMidi([0x90, RANDOM_PAD, 100]); ui.onMidi([0x80, RANDOM_PAD, 0]);
+check(ui.title() === "RANDOM DARK", "style DARK: " + ui.title());
+check(Number(values.vcf_cut) <= STYLE_RANGES.DARK.vcf_cut[1] + 1e-9 || Number(values.vcf_cut) <= Number(values.vco1_freq) * 0.5 + 0.18 + 1e-3,
+      "DARK range used: cut " + values.vcf_cut);
+values.random_style = "0";
 
 /* a second press gives a different patch */
 const before = JSON.stringify(values);
@@ -171,4 +198,4 @@ check(padBlocked, "taken again when shown");
 check(ui.handleBack() === false, "Back on MAIN leaves the module");
 
 if (failures) { console.error(`${failures} UI failure(s)`); process.exit(1); }
-console.log("PASS: ui (DRIFTER, real page engine)");
+console.log("PASS: ui (Drifter, real page engine, 9000 RANDOM patches)");

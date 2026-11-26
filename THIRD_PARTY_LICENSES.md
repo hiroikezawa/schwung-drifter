@@ -1,6 +1,6 @@
-# Third-party code in DRIFTER
+# Third-party code in Drifter
 
-DRIFTER itself is MIT licensed (see `LICENSE`), Copyright (c) 2026 Hiro Ikezawa.
+Drifter itself is MIT licensed (see `LICENSE`), Copyright (c) 2026 Hiro Ikezawa.
 
 The synth engine is original code written for this module. "driftbox" and
 "REON" are used only to describe what inspired it; it is not affiliated with

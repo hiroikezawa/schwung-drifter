@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Native build + every test: engine (ASan/UBSan), real dlopen smoke through the
-# v2 ABI, then the Move build (check_abi.py rejects a symbol newer than Move's
-# glibc 2.34).   scripts/test.sh --quick   skips the 60 s stress render.
+# v2 ABI, the UI on Schwung's real page engine, RANDOM patches rendered and
+# measured, then the Move build (check_abi.py rejects a symbol newer than
+# Move's glibc 2.34).   scripts/test.sh --quick   skips the 60 s stress render.
 set -euo pipefail
 MODULE="$(cd "$(dirname "$0")/.." && pwd)"
 bash "$MODULE/scripts/build.sh" native
@@ -33,6 +34,12 @@ elif [[ -n "$NODE_EXE" ]] && command -v wslpath >/dev/null 2>&1; then
     WSLENV=SCHWUNG_ROOT:DRIFTER_SHARED "$NODE_EXE" "$(wslpath -w "$MODULE/tests/test_ui.mjs")" | tail -1
 else
   echo "Node.js is required for the UI test" >&2; exit 1
+fi
+# RANDOM, rendered (tests/test_random.c): the patches test_ui.mjs wrote
+if [[ -f "$OUT/random_patches.txt" ]]; then
+  "${CC:-gcc}" -std=c11 -D_DEFAULT_SOURCE -O2 -fno-math-errno -Wall -Wextra -Werror -I"$MODULE/dsp" \
+    "$MODULE/tests/test_random.c" "$MODULE/dsp/db_engine.c" -o "$OUT/test-random" -lm
+  "$OUT/test-random" "$OUT/random_patches.txt"
 fi
 if command -v "${CROSS_PREFIX:-aarch64-linux-gnu-}gcc" >/dev/null 2>&1; then
   bash "$MODULE/scripts/build.sh" arm64

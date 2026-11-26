@@ -1,4 +1,4 @@
-/* DRIFTER - Schwung plugin API v2 adapter. MIT.
+/* Drifter - Schwung plugin API v2 adapter. MIT.
  *
  * Inspired by the REON driftbox SIII. Not affiliated with or endorsed by REON.
  *
@@ -6,9 +6,10 @@
  * no allocation (instances come from a static pool), no file I/O, no logging,
  * bounded work.
  *
- * MIDI: monophonic, last-note priority (a stack of held notes, newest on top):
- * releasing the newest key falls back to the newest one still held, and the
- * gate closes only when none is. No ADSR -- the gate drives the VCA directly. */
+ * A drone, not a keyboard: it sounds while Move's transport runs and fades
+ * out when it stops. MIDI notes, velocity and pitch bend are ignored; MIDI is
+ * read only for the clock, as the transport fallback of a host that has no
+ * get_beat_position. */
 #include "host/plugin_api_v1.h"
 #include "db_engine.h"
 #include "db_metadata.h"
@@ -22,7 +23,6 @@
 
 _Static_assert(ATOMIC_INT_LOCK_FREE == 2, "instance pool needs lock-free atomics");
 _Static_assert(MOVE_FRAMES_PER_BLOCK <= DB_MAX_FRAMES, "block larger than the engine's");
-_Static_assert(DP_SUB == DP_COUNT - 1, "a v1 state is v2 minus its LAST value, which must be SUB");
 _Static_assert(sizeof(db_param_options) / sizeof(db_param_options[0]) == DP_COUNT,
                "module.json and db_params disagree on the parameter count");
 
@@ -32,25 +32,23 @@ _Static_assert(sizeof(db_param_options) / sizeof(db_param_options[0]) == DP_COUN
 #define DB_INSTANCES 6
 
 /* The shim parks a slot whose output stays below 5 LSB for ~1 s and then
- * renders it only every ~0.5 s. A MIDI note to the slot wakes it at once
- * (shadow_midi.c), but a TRIGGER or GATE HOLD from the knob grid is a
- * set_param, which does not -- so for DB_AWAKE_S after a parameter write (and
- * always while GATE HOLD is Play, waiting for the transport) a
- * block that would be silent carries a 6 LSB DC offset (-75 dBFS, inaudible)
- * and the slot stays awake. After that it parks again and costs nothing.
+ * renders it only every ~0.5 s -- which would start the drone up to half a
+ * second after Play. So while stopped, a block that would be silent carries a
+ * 6 LSB DC offset (-75 dBFS, inaudible) and the slot stays awake. The engine
+ * itself computes nothing while stopped, so this costs almost no CPU.
  * VOLUME 0 is always exact digital silence. */
 #define DB_KEEPALIVE_LSB 6
 #define DB_SILENCE_LSB 4
-#define DB_AWAKE_S 30
+
+/* MIDI clock fallback: running from Start/Continue/Clock until Stop, or until
+ * no clock has arrived for this long (a lost Stop must not drone forever). */
+#define DB_CLOCK_TIMEOUT_S 0.5f
 
 typedef struct {
     atomic_int used;
     db_engine engine;
-    uint8_t held[16];       /* held notes, most recent last */
-    int nheld;
-    int32_t awake_left;     /* host samples of keepalive remaining */
-    /* MIDI clock fallback, used only when the host has no get_beat_position */
     int clk_running;
+    int32_t clk_silent;     /* host samples since the last clock byte */
     float buf[DB_MAX_FRAMES];
 } db_instance;
 
@@ -58,25 +56,17 @@ static db_instance g_pool[DB_INSTANCES];
 static float g_sr = (float)MOVE_SAMPLE_RATE;
 static const host_api_v1_t *g_host;
 
-/* Stock knob grid, in signal order -- DRIFT, then the oscillators, then the
- * filter -- with what is played on the first two pages (MAIN, MIX/VCF) and
- * what is set once (waveforms, modes, routing switches) behind them on
- * SETUP 1 and SETUP 2. Served as grid_hierarchy (see get_param). */
+/* Stock knob grid: MAIN is what is played live, SETUP what is set once.
+ * Served as grid_hierarchy (see get_param). */
 static const char db_hierarchy[] =
     "{\"modes\":null,\"levels\":{"
-      "\"root\":{\"label\":\"DRIFTER\","
-        "\"knobs\":[\"volume\",\"drift_x\",\"drift_y\",\"vco1_freq\",\"vco1_mod\",\"vco2_freq\",\"vco2_mod\",\"sub\"],"
-        "\"params\":[\"volume\",\"drift_x\",\"drift_y\",\"vco1_freq\",\"vco1_mod\",\"vco2_freq\",\"vco2_mod\",\"sub\","
-          "{\"level\":\"mixvcf\",\"label\":\"MIX/VCF\"},{\"level\":\"setup1\",\"label\":\"SETUP 1\"},{\"level\":\"setup2\",\"label\":\"SETUP 2\"}]},"
-      "\"mixvcf\":{\"label\":\"MIX/VCF\","
-        "\"knobs\":[\"vco1_vol\",\"vco2_vol\",\"vcf_cut\",\"vcf_reso\",\"vcf_mod\",\"lfo_rate\",\"delay_time\",\"delay_feedback\"],"
-        "\"params\":[\"vco1_vol\",\"vco2_vol\",\"vcf_cut\",\"vcf_reso\",\"vcf_mod\",\"lfo_rate\",\"delay_time\",\"delay_feedback\"]},"
-      "\"setup1\":{\"label\":\"SETUP 1\","
-        "\"knobs\":[\"drift_x_target\",\"drift_y_target\",\"vco1_wave\",\"vco1_mode\",\"vco2_wave\",\"vco2_mode\",\"vco1_lfo\",\"vco2_lfo\"],"
-        "\"params\":[\"drift_x_target\",\"drift_y_target\",\"vco1_wave\",\"vco1_mode\",\"vco2_wave\",\"vco2_mode\",\"vco1_lfo\",\"vco2_lfo\"]},"
-      "\"setup2\":{\"label\":\"SETUP 2\","
-        "\"knobs\":[\"vcf_vco1\",\"vcf_vco2\",\"vcf_lfo\",\"lfo_wave\",\"gate_hold\",\"trigger\"],"
-        "\"params\":[\"vcf_vco1\",\"vcf_vco2\",\"vcf_lfo\",\"lfo_wave\",\"gate_hold\",\"trigger\"]}"
+      "\"root\":{\"label\":\"MAIN\","
+        "\"knobs\":[\"volume\",\"drift_x\",\"drift_y\",\"fm_drive\",\"sync_sweep\",\"vcf_cut\",\"vcf_reso\",\"motion\"],"
+        "\"params\":[\"volume\",\"drift_x\",\"drift_y\",\"fm_drive\",\"sync_sweep\",\"vcf_cut\",\"vcf_reso\",\"motion\","
+          "{\"level\":\"setup\",\"label\":\"SETUP\"}]},"
+      "\"setup\":{\"label\":\"SETUP\","
+        "\"knobs\":[\"vco1_freq\",\"vco2_freq\",\"vco_mix\",\"bass\",\"dirty_sub\",\"delay\",\"character\",\"random_style\"],"
+        "\"params\":[\"vco1_freq\",\"vco2_freq\",\"vco_mix\",\"bass\",\"dirty_sub\",\"delay\",\"character\",\"random_style\"]}"
     "}}";
 
 /* ---- lifecycle ---------------------------------------------------------- */
@@ -87,9 +77,8 @@ static void *create_instance(const char *module_dir, const char *defaults) {
         if (atomic_compare_exchange_strong(&g_pool[i].used, &expected, 1)) {
             db_instance *inst = &g_pool[i];
             db_engine_init(&inst->engine, g_sr);
-            inst->nheld = 0;
-            inst->awake_left = 0;
             inst->clk_running = 0;
+            inst->clk_silent = 0;
             return inst;
         }
     }
@@ -100,51 +89,14 @@ static void destroy_instance(void *ptr) {
     if (ptr) atomic_store(&((db_instance *)ptr)->used, 0);
 }
 
-/* ---- MIDI --------------------------------------------------------------- */
-static void apply_gate(db_instance *inst) {
-    if (inst->nheld > 0) db_engine_set_gate(&inst->engine, 1, inst->held[inst->nheld - 1]);
-    else db_engine_set_gate(&inst->engine, 0, -1);   /* keeps the last pitch */
-}
-
-static int remove_note(db_instance *inst, uint8_t n) {
-    for (int i = 0; i < inst->nheld; ++i)
-        if (inst->held[i] == n) {
-            memmove(&inst->held[i], &inst->held[i + 1], (size_t)(inst->nheld - i - 1));
-            inst->nheld--;
-            return 1;
-        }
-    return 0;
-}
-
-static void note_on(db_instance *inst, uint8_t n) {
-    remove_note(inst, n);
-    if (inst->nheld == (int)sizeof(inst->held)) {
-        memmove(&inst->held[0], &inst->held[1], sizeof(inst->held) - 1);
-        inst->nheld--;
-    }
-    inst->held[inst->nheld++] = n;
-    apply_gate(inst);
-}
-
-static void note_off(db_instance *inst, uint8_t n) {
-    if (remove_note(inst, n)) apply_gate(inst);
-}
-
+/* ---- MIDI: the clock only ------------------------------------------------ */
 static void on_midi(void *ptr, const uint8_t *msg, int len, int source) {
     (void)source;
     if (!ptr || !msg || len < 1) return;
     db_instance *inst = ptr;
-    uint8_t st = msg[0] & 0xF0;
-    if (st == 0x90 && len >= 3) {
-        if (msg[2]) note_on(inst, msg[1] & 0x7F);
-        else note_off(inst, msg[1] & 0x7F);
-    } else if (st == 0x80 && len >= 2) {
-        note_off(inst, msg[1] & 0x7F);
-    } else if (st == 0xB0 && len >= 3 && (msg[1] == 123 || msg[1] == 120)) {
-        inst->nheld = 0;                      /* All Notes / Sound Off */
-        apply_gate(inst);
-    } else if (msg[0] == 0xFA || msg[0] == 0xFB || msg[0] == 0xF8) {
+    if (msg[0] == 0xFA || msg[0] == 0xFB || msg[0] == 0xF8) {
         inst->clk_running = 1;                /* Start / Continue / Clock */
+        inst->clk_silent = 0;
     } else if (msg[0] == 0xFC) {
         inst->clk_running = 0;                /* Stop */
     }
@@ -179,12 +131,20 @@ static int parse_value(int idx, const char *s, float *out) {
     return 0;
 }
 
-/* ---- state blob: {"v":2,"p":[every parameter but TRIGGER, in order]} ------
- * Applied only if every value is valid and in range. v1 (before 0.6.0) has no
- * SUB value -- SUB is the LAST parameter, so v1 is v2 minus its final entry --
- * and loads with SUB at its default. */
+/* ---- state blob: {"v":3,"p":[every parameter, in order]} -----------------
+ * Applied only if every value is valid and in range.
+ *
+ * v1 / v2 (0.5.0 .. 0.7.0, the keyboard synth) had a different parameter
+ * set. They load WITHOUT error, but only what still means the same thing is
+ * carried over -- VOLUME, CUTOFF and RESONANCE; everything else takes this
+ * version's default, DRIFT X/Y included (centred). The old blob was a list of
+ * 28 (v1) or 29 (v2) values; VOLUME is its 28th, CUTOFF and RESO its 13th and
+ * 14th. */
 #define DB_STATE_MAX 2048
-#define DB_STATE_COUNT (DP_COUNT - 1)
+#define DB_LEGACY_MAX 29
+#define DB_LEGACY_CUT 12
+#define DB_LEGACY_RESO 13
+#define DB_LEGACY_VOLUME 27
 
 static const char *find_key(const char *s, const char *key) {
     size_t n = strlen(key);
@@ -226,48 +186,57 @@ static const char *read_number(const char *p, float *out) {
     return p;
 }
 
+/* "[n, n, ...]" -> up to max numbers; returns the count, or -1. */
+static int read_array(const char *p, float *out, int max) {
+    if (!p || *p != '[') return -1;
+    p = skip_ws(p + 1);
+    if (*p == ']') return 0;
+    for (int n = 0; n < max; ) {
+        p = read_number(p, &out[n]);
+        if (!p) return -1;
+        ++n;
+        p = skip_ws(p);
+        if (*p == ']') return n;
+        if (*p != ',') return -1;
+        p = skip_ws(p + 1);
+    }
+    return -1;                               /* longer than max */
+}
+
 static int restore_state(db_engine *e, const char *text) {
     if (!text || strlen(text) > DB_STATE_MAX) return 0;
     const char *s = skip_ws(text);
     if (*s != '{') return 0;
-    float v, prm[DP_COUNT];
+    float v, prm[DB_LEGACY_MAX > DP_COUNT ? DB_LEGACY_MAX : DP_COUNT];
     const char *p = find_key(s, "v");
-    if (!p || !read_number(p, &v) || (v != 1.0f && v != 2.0f)) return 0;
-    const int legacy = v == 1.0f;
-    const int count = legacy ? DB_STATE_COUNT - 1 : DB_STATE_COUNT;
-    p = find_key(s, "p");
-    if (!p || *p != '[') return 0;
-    p = skip_ws(p + 1);
-    int n = 0;
-    prm[DP_SUB] = db_params[DP_SUB].def;
+    if (!p || !read_number(p, &v)) return 0;
+    int n = read_array(find_key(s, "p"), prm, (int)(sizeof(prm) / sizeof(prm[0])));
+    if (v == 1.0f || v == 2.0f) {
+        if (n != (v == 1.0f ? 28 : 29)) return 0;
+        const float cut = prm[DB_LEGACY_CUT], reso = prm[DB_LEGACY_RESO], vol = prm[DB_LEGACY_VOLUME];
+        if (!(cut >= 0.0f && cut <= 1.0f && reso >= 0.0f && reso <= 1.0f && vol >= 0.0f && vol <= 1.0f))
+            return 0;
+        for (int i = 0; i < DP_COUNT; ++i) db_engine_set_param(e, i, db_params[i].def);
+        db_engine_set_param(e, DP_VOLUME, vol);
+        db_engine_set_param(e, DP_VCF_CUT, cut);
+        db_engine_set_param(e, DP_VCF_RESO, reso);
+        return 1;
+    }
+    if (v != 3.0f || n != DP_COUNT) return 0;
     for (int i = 0; i < DP_COUNT; ++i) {
-        if (i == DP_TRIGGER || (legacy && i == DP_SUB)) continue;
-        p = read_number(p, &prm[i]);
-        if (!p) return 0;
         const db_param_info *pi = &db_params[i];
         if (prm[i] < pi->min || prm[i] > pi->max) return 0;
         if (pi->is_int && prm[i] != floorf(prm[i])) return 0;
-        p = skip_ws(p);
-        if (++n < count) {
-            if (*p != ',') return 0;
-            p = skip_ws(p + 1);
-        }
     }
-    if (*p != ']') return 0;
-    for (int i = 0; i < DP_COUNT; ++i)
-        if (i != DP_TRIGGER) db_engine_set_param(e, i, prm[i]);
+    for (int i = 0; i < DP_COUNT; ++i) db_engine_set_param(e, i, prm[i]);
     return 1;
 }
 
 static int write_state(const db_engine *e, char *buf, int size) {
-    int n = snprintf(buf, size, "{\"v\":2,\"p\":[");
-    int first = 1;
-    for (int i = 0; i < DP_COUNT && n > 0 && n < size; ++i) {
-        if (i == DP_TRIGGER) continue;
+    int n = snprintf(buf, size, "{\"v\":3,\"p\":[");
+    for (int i = 0; i < DP_COUNT && n > 0 && n < size; ++i)
         n += snprintf(buf + n, size - n, db_params[i].is_int ? "%s%.0f" : "%s%.4f",
-                      first ? "" : ",", e->param[i]);
-        first = 0;
-    }
+                      i ? "," : "", e->param[i]);
     if (n > 0 && n < size) n += snprintf(buf + n, size - n, "]}");
     if (n < 0 || n >= size) { buf[0] = 0; return -1; }
     return n;
@@ -281,7 +250,6 @@ static void set_param(void *ptr, const char *key, const char *val) {
     int idx = param_index(key);
     if (idx < 0 || !parse_value(idx, val, &f)) return;
     db_engine_set_param(&inst->engine, idx, f);
-    inst->awake_left = (int32_t)(DB_AWAKE_S * g_sr);
 }
 
 static int copy_text(char *buf, int size, const char *text) {
@@ -323,9 +291,14 @@ static int get_error(void *ptr, char *buf, int size) {
 
 /* ---- audio -------------------------------------------------------------- */
 /* Move's transport. The host's beat position is < 0 while stopped; MIDI
- * clock is the fallback for a host without it. */
-static int transport_running(const db_instance *inst) {
+ * clock is the fallback for a host without it. With neither, it is stopped:
+ * never a drone nobody can stop. */
+static int transport_running(db_instance *inst, int frames) {
     if (g_host && g_host->get_beat_position) return g_host->get_beat_position() >= 0.0;
+    if (inst->clk_running) {
+        inst->clk_silent += frames;
+        if (inst->clk_silent > (int32_t)(DB_CLOCK_TIMEOUT_S * g_sr)) inst->clk_running = 0;
+    }
     return inst->clk_running;
 }
 
@@ -342,7 +315,7 @@ static void render_block(void *ptr, int16_t *out, int frames) {
         return;
     }
     db_instance *inst = ptr;
-    db_engine_set_transport(&inst->engine, transport_running(inst));
+    db_engine_set_transport(&inst->engine, transport_running(inst, frames));
     db_engine_render(&inst->engine, inst->buf, frames);
     int peak = 0;
     for (int i = 0; i < frames; ++i) {
@@ -352,11 +325,8 @@ static void render_block(void *ptr, int16_t *out, int frames) {
         int m = abs(a);
         if (m > peak) peak = m;
     }
-    /* GATE HOLD Play must start on the downbeat, so it never lets the slot
-     * park while waiting for Play (a parked slot is rendered every ~0.5 s). */
-    int awake = inst->awake_left > 0 || (int)inst->engine.param[DP_GATE_HOLD] == DB_HOLD_PLAY;
-    if (inst->awake_left > 0) inst->awake_left -= frames;
-    if (awake && peak <= DB_SILENCE_LSB && inst->engine.param[DP_VOLUME] > 0.0f)
+    /* never let the slot park: Play must start the drone on the downbeat */
+    if (peak <= DB_SILENCE_LSB && inst->engine.param[DP_VOLUME] > 0.0f)
         for (int i = 0; i < frames * 2; ++i) out[i] = DB_KEEPALIVE_LSB;
 }
 

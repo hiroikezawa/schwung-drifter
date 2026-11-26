@@ -1,16 +1,22 @@
-/* DRIFTER - engine. MIT.
+/* Drifter - chaotic drone engine. MIT.
  *
  * Inspired by the REON driftbox SIII. Not affiliated with or endorsed by
  * REON. A clean-room implementation from the published feature list and
  * general DSP technique; no firmware or circuit is reproduced.
  *
- *   LFO --> VCO1 / VCO2 / VCF
- *   VCO1 <-> VCO2   audio-rate cross FM (previous sample), optional hard sync
- *   MIX --> 24 dB ladder VCF (cutoff modulated at audio rate by VCO1/VCO2/LFO)
- *   --> VCA (gate, 3 ms smoothing) --> DELAY (time, feedback) --> VOLUME
+ * Not a keyboard synth: it drones while Move's transport runs and is silent
+ * while it is stopped. MIDI notes, velocity and pitch bend are ignored.
  *
- * Monophonic. Oscillators, mixer and VCF run at DB_OS x the host rate and are
- * decimated once; VCA, delay and output run at the host rate.
+ *   MOTION (slow sines + smooth random) --> FM / SYNC / VCF mod / cutoff / ratio
+ *   VCO1 (square, sync master) <-> VCO2 (saw, sync slave)
+ *        cross FM both ways from each VCO's triangle, hard sync 1 -> 2
+ *   MIX --> 24 dB ladder VCF (cutoff modulated at audio rate: DRIFT Y)
+ *   + CLEAN SUB (sine, VCO1's pitch folded into 40..80 Hz, no FM)
+ *   + DIRTY SUB (same phase, phase modulated by VCO1, saturated, low passed)
+ *   --> DELAY (one macro) --> transport fade --> safety --> VOLUME
+ *
+ * Oscillators, mixer, VCF and both subs run at DB_OS x the host rate and are
+ * decimated once; delay and output run at the host rate.
  * No allocation, no I/O: db_engine_render is called from the audio callback.
  */
 #ifndef DB_ENGINE_H
@@ -26,25 +32,19 @@
 #define DB_HB_TAPS 31              /* halfband decimator length (odd) */
 
 /* Parameter indices. ORDER IS the chain_params order in module.json
- * (scripts/metadata.py fails the build on drift); the KEYS are the stable
- * IDs and never change. */
+ * (scripts/metadata.py fails the build on drift) and the state blob's. */
 enum {
-    DP_VCO1_FREQ, DP_VCO1_MOD, DP_VCO1_WAVE, DP_VCO1_MODE, DP_VCO1_LFO, DP_VCO1_VOL,
-    DP_VCO2_FREQ, DP_VCO2_MOD, DP_VCO2_WAVE, DP_VCO2_MODE, DP_VCO2_LFO, DP_VCO2_VOL,
-    DP_VCF_CUT, DP_VCF_RESO, DP_VCF_MOD, DP_VCF_VCO1, DP_VCF_VCO2, DP_VCF_LFO,
-    DP_LFO_RATE, DP_LFO_WAVE,
-    DP_DELAY_TIME, DP_DELAY_FB,
-    DP_DRIFT_X, DP_DRIFT_X_TGT, DP_DRIFT_Y, DP_DRIFT_Y_TGT,
-    DP_GATE_HOLD, DP_TRIGGER, DP_VOLUME,
-    DP_SUB,                 /* appended in 0.6.0: keys before it keep their order */
+    /* MAIN */
+    DP_VOLUME, DP_DRIFT_X, DP_DRIFT_Y, DP_FM_DRIVE,
+    DP_SYNC_SWEEP, DP_VCF_CUT, DP_VCF_RESO, DP_MOTION,
+    /* SETUP */
+    DP_VCO1_FREQ, DP_VCO2_FREQ, DP_VCO_MIX, DP_BASS,
+    DP_DIRTY_SUB, DP_DELAY, DP_CHARACTER, DP_RANDOM_STYLE,
     DP_COUNT
 };
 
-enum { DB_MODE_FM, DB_MODE_SYNC };
-enum { DB_LFO_TRI, DB_LFO_SQR };
-enum { DB_X_VCO, DB_X_DTIME };
-enum { DB_Y_VCF, DB_Y_FB };
-enum { DB_HOLD_OFF, DB_HOLD_PLAY, DB_HOLD_ALWAYS };
+enum { DB_CHAR_FM, DB_CHAR_SYNC, DB_CHAR_FMSYNC };
+enum { DB_STYLE_CHAOTIC, DB_STYLE_DARK, DB_STYLE_INDUSTRIAL };
 
 typedef struct {
     const char *key;
@@ -54,63 +54,89 @@ typedef struct {
 
 extern const db_param_info db_params[DP_COUNT];
 
-/* ---- ranges (README "Controls"); exported so tests measure the same maps ---- */
-#define DB_VCO_LO_HZ 0.3f          /* driftbox S spec: 0.3 Hz .. 14 kHz */
-#define DB_VCO_HI_HZ 14000.0f
-#define DB_VCO_REF_NOTE 60         /* FREQ is the pitch at this MIDI note */
-#define DB_FM_OCT 6.0f             /* MOD = 1: +-6 octaves per unit of source */
-#define DB_VCF_LO_HZ 16.0f
-#define DB_VCF_OCT 10.1f           /* 16 Hz .. ~17.6 kHz */
-#define DB_VCF_MOD_OCT 6.0f
-#define DB_RESO_K 4.4f             /* self-oscillates above 4 (RESO ~0.91) */
-#define DB_LFO_LO_HZ 0.02f         /* 0.02 .. 200 Hz */
-#define DB_LFO_DECADES 4.0f
-#define DB_DELAY_LO_S 0.010f       /* 10 ms .. 1 s */
-#define DB_DELAY_DECADES 2.0f
-#define DB_DRIFT_X_OCT 3.0f        /* X on VCO: +-3 octaves, both VCOs */
-#define DB_DRIFT_X_DT_OCT 2.0f     /* X on D.TIME: x1/4 .. x4 */
-#define DB_DRIFT_Y_OCT 5.0f        /* Y on VCF: +-5 octaves */
-#define DB_DRIFT_Y_FB 0.6f         /* Y on F.B: +-0.6 of feedback */
-#define DB_TRIG_S 0.2f             /* TRIGGER opens the gate this long */
-#define DB_SUB_GAIN 1.0f           /* SUB = 1: sine peak, after the VCF */
+/* ---- ranges (README "Parameters"); exported so tests measure the same maps ---- */
+#define DB_VCO_LO_HZ 27.5f         /* VCO FREQ: A0 .. A4, 4 octaves */
+#define DB_VCO_OCT 4.0f
+#define DB_SUB_LO_HZ 40.0f         /* the subs fold VCO1's pitch into 40..80 Hz */
+#define DB_FM_OCT 6.0f             /* FM DRIVE = 1: VCO2 -> VCO1 +-6 octaves */
+#define DB_FM_BACK 0.8f            /* VCO1 -> VCO2 is this much of it */
+#define DB_FM_DOWN_OCT 1.5f        /* FM never takes a VCO further below its pitch */
+#define DB_FM_UP_OCT 5.0f          /* ...or further above it */
+#define DB_SYNC_OCT 5.0f           /* SYNC SWEEP = 1: slave 5 octaves up */
+#define DB_SWEEP_FM_OCT 3.0f       /* ...or, in FM mode, VCO2 3 octaves up */
+#define DB_DRIFT_X_DN_OCT 1.0f     /* DRIFT X: VCO2 against VCO1, -1 .. */
+#define DB_DRIFT_X_UP_OCT 3.0f     /* .. +3 octaves (the subs keep the bass) */
+#define DB_DRIFT_Y_OCT 5.0f        /* DRIFT Y: audio-rate VCF mod, +-5 octaves */
+#define DB_DRIFT_Y_OPEN_OCT 4.0f   /* +Y also opens the cutoff up to 4 octaves */
+#define DB_FM_OPEN_OCT 1.0f        /* FM DRIVE and SYNC SWEEP each open the */
+#define DB_SWEEP_OPEN_OCT 1.0f     /* cutoff by up to 1 octave, so what they add is heard */
+#define DB_VCF_LO_HZ 40.0f         /* CUTOFF: 40 Hz .. 16 kHz */
+#define DB_VCF_OCT 8.6439f
+#define DB_RESO_K 4.2f             /* self-oscillates above 4 (RESO ~0.95) */
+#define DB_FADE_IN_S 0.020f        /* transport start / stop fades */
+#define DB_FADE_OUT_S 0.030f
 
-float db_vco_hz(float v);          /* FREQ knob -> Hz at the reference note */
+float db_vco_hz(float v);          /* FREQ knob -> Hz */
+float db_sub_hz(float vco1);       /* VCO1 FREQ knob -> both subs' Hz */
 float db_cut_hz(float v);
-float db_lfo_hz(float v);
-float db_delay_s(float v);
-float db_mod_depth(float v);       /* knob -> 0..1 depth (squared taper) */
+float db_fm_oct(float v);          /* FM DRIVE knob -> octaves */
+float db_delay_s(float v);         /* DELAY macro -> time, feedback, wet */
+float db_delay_fb(float v);
+float db_delay_wet(float v);
+
+/* MOTION: five slow bipolar signals, each a sine plus a smooth random walk. */
+#define DB_MOTION_N 5
+enum { DB_MO_FM, DB_MO_SYNC, DB_MO_VCF, DB_MO_CUT, DB_MO_RATIO };
+typedef struct {
+    float sin_ph[DB_MOTION_N];
+    float rw_from[DB_MOTION_N], rw_to[DB_MOTION_N], rw_t[DB_MOTION_N], rw_len[DB_MOTION_N];
+    float jit_from[DB_MOTION_N], jit_to[DB_MOTION_N], jit_t;   /* faster term above 0.6 */
+    uint32_t rng;
+    float out[DB_MOTION_N];         /* -1..1 times the MOTION depth */
+} db_motion;
 
 typedef struct {
     float sr, osr;
     float param[DP_COUNT];
 
     db_osc osc[2];
-    float last[2];          /* previous-sample VCO outputs (cross FM) */
-    int mod_source[2];      /* which VCO modulates / syncs each VCO */
-    float lfo_phase, lfo_sq;
+    float tri[2];           /* each VCO's triangle (its FM signal), last sample */
+    float tri2_dc, dc_coef; /* VCO2's triangle has a DC bias once synced: removed */
     db_ladder vcf;
     uint32_t rng;           /* VCF seed noise */
+    db_motion mo;
+    float mo_prev[DB_MOTION_N];  /* MOTION at the previous block (ramped across) */
 
     /* smoothed controls (per oversampled sample) */
     float p_oct[2];         /* log2 Hz */
+    float sub_oct;
     float cut_oct;
-    float sub_phase, sub_s; /* SUB: sine an octave below VCO1, level smoothed */
-    float vol_mix[2];
-    float sm_coef, sq_coef;
+    float fm_s[2];          /* FM depth in octaves into VCO1 / into VCO2 */
+    float vcfm_s;           /* signed DRIFT Y depth, octaves */
+    float mix_s;
+    float clean_s, dirty_s, dirty_amt_s;
+    float sm_coef, slow_coef;
 
-    /* gate */
-    int gate;               /* a MIDI note is held */
-    int note;               /* last note (kept after release) */
-    int transport;          /* Move's transport is running (GATE HOLD Play) */
-    int32_t trig_left;      /* TRIGGER samples remaining */
-    float vca, vca_coef;
+    /* subs */
+    float sub_phase;
+    float dsub_lp;          /* dirty sub's own low pass */
+    float wander_ph;        /* slow index wander of the dirty sub */
+
+    /* CHARACTER: switched under a short duck so the swap is never a click */
+    int character;          /* the mode in use */
+    float duck, duck_coef;
+
+    /* transport */
+    int transport;          /* Move's transport is running */
+    int idle;               /* stopped and fully faded: nothing is rendered */
+    float fade, fade_in, fade_out;
 
     /* delay (host rate) */
     db_delay dly;
     float fb_s, wet_s, fb_coef, t_coef;
 
     /* output */
-    float dc_x, dc_y, dc_r;
+    float hp_b0, hp_b1, hp_b2, hp_a1, hp_a2, hp_z1, hp_z2;  /* 25 Hz 2-pole HP */
     float lim_gain, lim_rel;
     float vol_s, vol_coef;
     unsigned resets;        /* NaN/Inf recoveries (diagnostic) */
@@ -122,14 +148,15 @@ typedef struct {
 } db_engine;
 
 void db_engine_init(db_engine *e, float sample_rate);
-/* Clears all audio state (phases, filter, delay line); parameters kept. */
+/* Clears all audio state (phases, filter, delay line); parameters and the
+ * MOTION walk are kept. */
 void db_engine_restart(db_engine *e);
 void db_engine_set_param(db_engine *e, int idx, float v);
-/* gate: any note held; note: the note to sound (last-note priority). */
-void db_engine_set_gate(db_engine *e, int gate, int note);
-/* Move's transport state, once per block (GATE HOLD Play follows it). */
+/* Move's transport, once per block: running = drone, stopped = fade out. */
 void db_engine_set_transport(db_engine *e, int running);
-void db_engine_trigger(db_engine *e);
+/* Advance MOTION by `seconds` (called by render once per block; exported so
+ * the tests can watch it alone). */
+void db_motion_step(db_motion *m, float motion, float seconds);
 /* frames <= DB_MAX_FRAMES; writes -1..1 mono floats. */
 void db_engine_render(db_engine *e, float *out, int frames);
 

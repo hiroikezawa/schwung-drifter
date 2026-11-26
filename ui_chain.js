@@ -1,5 +1,5 @@
 /*
- * DRIFTER - Signal Chain UI.
+ * Drifter - Signal Chain UI.
  *
  * The shadow UI opens this (instead of its stock knob grid) because the DSP
  * answers `ui_hierarchy` with an empty string. It draws the same grid with

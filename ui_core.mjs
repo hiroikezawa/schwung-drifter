@@ -1,29 +1,22 @@
 /*
- * DRIFTER - Signal Chain UI core.
+ * Drifter - Signal Chain UI core.
  *
  * Schwung's stock knob grid runs no module code, so it cannot take the pads.
  * The DSP therefore serves `ui_hierarchy` empty (the shadow UI then opens
- * ui_chain.js) and `grid_hierarchy` with the real pages, and this file drives
- * Schwung's OWN page engine (page_controller.mjs) with it: the same grid,
- * the same pages, plus the pads.
+ * ui_chain.js) and `grid_hierarchy` with the real pages (MAIN, SETUP), and
+ * this file drives Schwung's OWN page engine (page_controller.mjs) with it:
+ * the same grid, the same pages, plus the pads.
  *
  * THE PADS are taken (host_pad_block) while this screen is up -- the shim
  * blocks all 32 or none, and it hands them back to Move when the display
  * closes. Only one does anything:
- *   top-right (99)   RANDOM: every knob gets a new random value, except
- *                    VOLUME, GATE HOLD, DRIFT X/Y and their TARGETs, SUB and
- *                    TRIGGER. The ranges keep the patch audible (see
- *                    RANDOM_RANGES).
- * The other 31 are dark and do nothing; closing the screen gives them back to
- * Move as note pads.
+ *   top-right (99)   RANDOM: a new drone in the RANDOM STYLE chosen on SETUP.
+ * The other 31 are dark and do nothing.
  *
  * The random values are written through setParam -- the same path a knob
  * turn takes -- so the host's view of every parameter, the slot's saved
  * state and its automation all agree with what is heard. (With Move's Record
  * on, those writes are recorded like any knob turn.)
- *
- * Automation is shown by Schwung's own reads: `<key>:effective` and
- * `<key>:modulated` are passed through to the host untouched.
  *
  * Every dependency is injected (ui_chain.js binds the device, the tests bind
  * fakes), so nothing here touches a global.
@@ -36,70 +29,81 @@ export const LED = { RANDOM: 21, PRESSED: 120, OFF: 0 };
 const LEDS_PER_TICK = 8;                 /* 32 pads repainted every 4 frames */
 const NOTICE_MS = 1200;
 
+export const STYLES = ["CHAOTIC", "DARK", "INDUST"];
+
 /*
- * What RANDOM may set, and to what. Floats: [lo, hi] in the knob's own 0..1
- * (or -1..1) units. Enums: the option indices it may pick.
+ * What RANDOM may set, per RANDOM STYLE: [lo, hi] in each knob's 0..1 units.
+ * All three share the brief -- a heavy low end under complex overtones --
+ * and differ in emphasis: DARK is lower, slower and wetter, INDUSTRIAL harder
+ * (more FM and sync, more grit, drier), CHAOTIC the mixture with the most
+ * MOTION. The ranges were set against tests/test_random.c, which RENDERS
+ * thousands of these patches and measures level, low end, top end, DC and
+ * silence; the cross-key rules are in randomPatch().
  *
- * "Always audible" is the brief, so the ends that go silent or painful are
- * left out: VCO FREQ stays 40 Hz..1.2 kHz at C4 (no sub-audio LFO range),
- * VCO1 is never mixed out, the VCF never closes below ~380 Hz, RESO stays
- * under self-oscillation, FM / VCF MOD stop before pure noise, FEEDBACK stops
- * before the self-sustaining wash. Constraints across keys are in
- * randomPatch().
+ * VCO1 FREQ stays in 31..92 Hz (a bass drone); VCO2 is set as an INTERVAL
+ * above it, not a free frequency, so the two always relate.
  */
-export const RANDOM_RANGES = {
-    vco1_freq: [0.45, 0.77],
-    vco1_mod: [0.0, 0.6],
-    vco2_freq: [0.40, 0.80],
-    vco2_mod: [0.0, 0.6],
-    vco1_vol: [0.5, 1.0],
-    vco2_vol: [0.0, 1.0],
-    vcf_cut: [0.45, 0.95],
-    vcf_reso: [0.0, 0.85],
-    vcf_mod: [0.0, 0.6],
-    lfo_rate: [0.1, 0.75],
-    delay_time: [0.0, 1.0],
-    delay_feedback: [0.0, 0.7],
-    vco1_wave: [0, 1, 2, 3, 4],
-    vco2_wave: [0, 1, 2, 3, 4],
-    vco1_mode: [0, 1],
-    vco2_mode: [0, 1],
-    vco1_lfo: [0, 1],
-    vco2_lfo: [0, 1],
-    vcf_vco1: [0, 1],
-    vcf_vco2: [0, 1],
-    vcf_lfo: [0, 1],
-    lfo_wave: [0, 1],
+export const STYLE_RANGES = {
+    CHAOTIC: {
+        vco1_freq: [0.08, 0.43], fm_drive: [0.20, 0.70], sync_sweep: [0.10, 0.70],
+        vcf_cut: [0.38, 0.78], vcf_reso: [0.10, 0.72], motion: [0.45, 0.85],
+        vco_mix: [0.25, 0.75], bass: [0.45, 0.80], dirty_sub: [0.20, 0.70], delay: [0.10, 0.60],
+    },
+    DARK: {
+        vco1_freq: [0.05, 0.32], fm_drive: [0.05, 0.42], sync_sweep: [0.00, 0.38],
+        vcf_cut: [0.28, 0.56], vcf_reso: [0.20, 0.68], motion: [0.20, 0.55],
+        vco_mix: [0.20, 0.65], bass: [0.60, 0.90], dirty_sub: [0.30, 0.80], delay: [0.35, 0.85],
+    },
+    INDUST: {
+        vco1_freq: [0.15, 0.43], fm_drive: [0.40, 0.85], sync_sweep: [0.30, 0.90],
+        vcf_cut: [0.45, 0.82], vcf_reso: [0.15, 0.75], motion: [0.25, 0.65],
+        vco_mix: [0.35, 0.85], bass: [0.40, 0.70], dirty_sub: [0.40, 0.90], delay: [0.00, 0.40],
+    },
 };
-const ENUM_KEYS = new Set(["vco1_wave", "vco2_wave", "vco1_mode", "vco2_mode", "vco1_lfo",
-                           "vco2_lfo", "vcf_vco1", "vcf_vco2", "vcf_lfo", "lfo_wave"]);
-/* Never touched by RANDOM: the level, how it is gated, the joystick and what
- * it drives, the bass and the momentary trigger. */
-export const RANDOM_KEEP = ["volume", "gate_hold", "drift_x", "drift_y", "drift_x_target",
-                            "drift_y_target", "sub", "trigger"];
+/* VCO2 above VCO1, in octaves: unison, fourth, fifth, octave, octave + fifth,
+ * two octaves -- each with a few cents of detune so the pair beats. */
+const INTERVALS = [0, 5 / 12, 7 / 12, 1, 1 + 7 / 12, 2];
+const VCO_OCT = 4;                                /* VCO FREQ spans 4 octaves */
+/* What RANDOM writes besides the ranges: the joystick goes back to the
+ * centre, so the new drone starts where DRIFT can move it either way. */
+export const RANDOM_CENTRE = ["drift_x", "drift_y"];
+/* Never touched by RANDOM: the level, the mode and the style itself. */
+export const RANDOM_KEEP = ["volume", "character", "random_style"];
 
-const WAVE_NOISE = 4, MODE_SYNC = 1;
+const r3 = (x) => Math.round(x * 1000) / 1000;
+const clamp01 = (x) => Math.min(1, Math.max(0, x));
 
-/* A new patch: { key: "value" } for every key in RANDOM_RANGES, as the wire
- * strings setParam takes. `rand` is Math.random-shaped (injected for tests). */
-export function randomPatch(rand = Math.random) {
-    const out = {};
-    for (const [key, range] of Object.entries(RANDOM_RANGES)) {
-        if (ENUM_KEYS.has(key)) {
-            out[key] = range[Math.min(range.length - 1, Math.floor(rand() * range.length))];
-        } else {
-            const [lo, hi] = range;
-            out[key] = Math.round((lo + (hi - lo) * rand()) * 1000) / 1000;
-        }
-    }
-    /* Two noise VCOs have no pitch left at all; two synced VCOs reset each
-     * other into a buzz -- one of each is plenty. */
-    if (out.vco1_wave === WAVE_NOISE && out.vco2_wave === WAVE_NOISE) out.vco2_wave = 0;
-    if (out.vco1_mode === MODE_SYNC && out.vco2_mode === MODE_SYNC) out.vco1_mode = 0;
-    /* A VCF MOD depth with no source switched on does nothing; give it one. */
-    if (out.vcf_mod > 0.15 && !out.vcf_vco1 && !out.vcf_vco2 && !out.vcf_lfo) out.vcf_lfo = 1;
+/* A new patch: { key: "value" } as the wire strings setParam takes.
+ * `rand` is Math.random-shaped (injected for tests). */
+export function randomPatch(rand = Math.random, style = 0) {
+    const name = STYLES[style] || STYLES[0];
+    const R = STYLE_RANGES[name];
+    const pick = ([lo, hi]) => lo + (hi - lo) * rand();
+    const v = {};
+    for (const k of Object.keys(R)) v[k] = pick(R[k]);
+
+    /* VCO2: an interval above VCO1 (INDUSTRIAL may also go inharmonic) */
+    let iv = INTERVALS[Math.min(INTERVALS.length - 1, Math.floor(rand() * INTERVALS.length))];
+    if (name === "INDUST" && rand() < 0.4) iv = 0.15 + 1.6 * rand();
+    iv += (rand() - 0.5) * 0.04;                       /* +-4 cents x ~10 */
+    v.vco2_freq = v.vco1_freq + iv / VCO_OCT;
+    if (v.vco2_freq > 1) v.vco2_freq -= 1 / VCO_OCT;
+
+    /* FM and SYNC both at the top tear the drone apart; MOTION adds up to
+     * +-0.3 FM and +-0.25 SWEEP of its own, so a lively patch starts lower. */
+    if (v.fm_drive + v.sync_sweep > 1.3) v.sync_sweep = 1.3 - v.fm_drive;
+    if (v.motion > 0.7) v.fm_drive *= 0.85;
+    /* Resonance: the more FM, the less ringing on top of it; a low cutoff
+     * self-oscillating is a sine rumble that fights the sub. */
+    v.vcf_reso = Math.min(v.vcf_reso, 0.85 - 0.3 * v.fm_drive);
+    if (v.vcf_cut < 0.40) v.vcf_reso = Math.min(v.vcf_reso, 0.55);
+    /* The cutoff never sits below VCO1's own register: a closed filter
+     * would leave the subs alone and the drone hollow. */
+    v.vcf_cut = Math.max(v.vcf_cut, v.vco1_freq * 0.5 + 0.18);
+
     const wire = {};
-    for (const [k, v] of Object.entries(out)) wire[k] = String(v);
+    for (const [k, x] of Object.entries(v)) wire[k] = String(r3(clamp01(x)));
+    for (const k of RANDOM_CENTRE) wire[k] = "0";
     return wire;
 }
 
@@ -154,7 +158,7 @@ export function createUi(deps) {
         st.controller.load({ slot: 0, component: "synth", prefix: "synth" });
     }
 
-    const title = () => (now() < st.noticeUntil ? st.notice : "DRIFTER");
+    const title = () => (now() < st.noticeUntil ? st.notice : "Drifter");
 
     function padColor(note) {
         if (note !== RANDOM_PAD) return LED.OFF;
@@ -175,12 +179,13 @@ export function createUi(deps) {
 
     /* Every write goes out; a refused one is counted and said, never hidden. */
     function randomize() {
-        const patch = randomPatch(rand);
+        const style = Math.round(Number(getParam("random_style")));
+        const patch = randomPatch(rand, Number.isFinite(style) ? style : 0);
         let failed = 0;
         for (const [key, value] of Object.entries(patch))
             if (setParam(key, value) === false) failed++;
         if (st.controller && typeof st.controller.revalue === "function") st.controller.revalue();
-        showNotice(failed ? `RANDOM ${failed} FAILED` : "RANDOM");
+        showNotice(failed ? `RANDOM ${failed} FAILED` : `RANDOM ${STYLES[style] || STYLES[0]}`);
         announce(failed ? `Random, ${failed} failed` : "Random");
         return failed;
     }

@@ -1,17 +1,13 @@
-/* DRIFTER - delay. MIT.
+/* Drifter - delay. MIT.
  *
- * TIME and FEEDBACK only. What makes it less than a clean digital echo, and
- * nothing more:
- *   - the delay time GLIDES (one-pole, ~80 ms), so turning TIME -- or DRIFT X
- *     on D.TIME -- bends the repeats' pitch instead of clicking;
- *   - the repeats are darker the longer the delay (a bucket-brigade trait);
- *   - the feedback path saturates softly, so FEEDBACK at the top builds into a
- *     bounded, crumbling wash instead of running away.
- * A high pass in the loop keeps DC (a pulse wave through a low pass) from
- * piling up at high feedback.
- *
- * The SIII's delay type and time range are not published (README); 10 ms to
- * 1 s is an assumption.
+ * Driven by ONE macro (DELAY, see db_engine.c): time, feedback and wet level
+ * move together, from a short, quiet slap to long, dark repeats. Inside:
+ *   - the delay time GLIDES (one-pole), so turning DELAY bends the repeats'
+ *     pitch instead of clicking;
+ *   - the repeats are darker the longer the delay;
+ *   - the feedback path saturates softly and the macro stops at 0.75, so the
+ *     loop can never run away.
+ * A high pass in the loop keeps DC from piling up.
  */
 #ifndef DB_DELAY_H
 #define DB_DELAY_H
